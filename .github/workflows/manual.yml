@@ -1,0 +1,50 @@
+name: Manual workflow
+on:
+  pull_request:
+  workflow_dispatch:
+  push:
+    paths-ignore:
+      - dummy.txt
+    branches:
+      - main
+
+jobs:
+  example-auto-close-success:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: qoomon/actions--create-deployment@main
+        with:
+          environment: example-auto-close-success
+          environment-url: https://example.com
+
+      - run: echo "Deploying..."
+      - run: exit 0
+      - run: echo "...done!"
+
+  example-auto-close-failure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: qoomon/actions--create-deployment@main
+        with:
+          environment: example-auto-close-failure
+          environment-url: https://example.com
+
+      - run: echo "Deploying..."
+      - run: exit 1
+      - run: echo "...done!"
+
+  example-manual:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: qoomon/actions--create-deployment@main
+        with:
+          environment: example-manual-success
+          environment-url: https://example.com
+
+      - run: echo "Deploying..."
+      - run: exit 0
+      - run: echo "...done!"
+
+      - uses: qoomon/actions--create-deployment/status@main
+        with:
+          state: success

@@ -1,0 +1,64 @@
+name: 'Create GitHub Deployment'
+description: 'Create Deployment'
+author: 'qoomon'
+branding:
+  icon: git-commit
+  color: blue
+
+inputs:
+  token:
+    description: 'A GitHub access token'
+    required: true
+    default: '${{ github.token }}'
+
+  repository:
+    description: 'The repository of the deployment'
+    required: true
+    default: '${{ github.repository }}'
+  ref:
+    description: 'The repository ref of the deployment'
+    required: true
+    default: '${{ github.ref }}'
+
+  task:
+    description: 'The task of the deployment'
+    default: 'deploy'
+  description:
+    description: 'The description of the deployment'
+  payload:
+    description: 'The payload of the deployment'
+  environment:
+    description: 'The environment of the deployment'
+
+  environment-url:
+    description: 'The environment URL of the deployment'
+  status:
+    description: |
+      The initial status of the deployment
+      Valid values are "error", "failure", "inactive", "in_progress", "queued", "pending", or "success"
+  status-description:
+    description: 'The description of the initial deployment status'
+
+  auto-close:
+    description: 'Enable auto-close for the deployment'
+    default: 'true'
+
+  workflow-context:
+    description: |
+      Workflow context e.g. '"<REUSABLE_WORKFLOW_JOB_NAME>", $ {{ toJSON(matrix) }}'
+  '#matrix':
+    description: 'DO NOT SET MANUALLY'
+    default: '${{ toJSON(matrix) }}'
+  '#job-status':
+    description: 'DO NOT SET MANUALLY'
+    default: '${{ job.status }}'
+
+outputs:
+  deployment-id:
+    description: 'The deployment id'
+
+runs:
+  using: node20
+
+  main: dist/main/index.js
+  post: dist/post/index.js

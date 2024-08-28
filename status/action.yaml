@@ -1,0 +1,46 @@
+name: 'Create GitHub Deployment Status'
+description: 'Create Deployment Status'
+author: 'qoomon'
+branding:
+  icon: git-commit
+  color: blue
+
+inputs:
+  token:
+    description: 'A GitHub access token'
+    required: true
+    default: '${{ github.token }}'
+
+  repository:
+    description: 'The repository to target'
+    required: true
+    default: '${{ github.repository }}'
+  deployment-id:
+    description: 'The deployment id'
+
+  state:
+    description: |
+      The status of the deployment
+      Valid values are "error", "failure", "inactive", "in_progress", "queued", "pending", or "success"
+  description:
+    description: 'The description of the deployment status'
+  environment:
+    description: 'The environment of the deployment status'
+  environment-url:
+    description: 'The environment URL of the deployment status'
+
+  workflow-context:
+    description: |
+      Workflow context e.g. '"<REUSABLE_WORKFLOW_JOB_NAME>", $ {{ toJSON(matrix) }}'
+  '#matrix':
+    description: 'DO NOT SET MANUALLY'
+    default: '${{ toJSON(matrix) }}'
+
+outputs:
+  deployment-id:
+    description: 'The deployment id'
+
+runs:
+  using: node20
+
+  main: dist/main/index.js
