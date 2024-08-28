@@ -2,7 +2,7 @@ name: 'Create GitHub Deployment Status'
 description: 'Create Deployment Status'
 author: 'qoomon'
 branding:
-  icon: git-commit
+  icon: tag
   color: blue
 
 inputs:

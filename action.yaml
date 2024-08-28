@@ -2,7 +2,7 @@ name: 'Create GitHub Deployment'
 description: 'Create Deployment'
 author: 'qoomon'
 branding:
-  icon: git-commit
+  icon: play
   color: blue
 
 inputs:
