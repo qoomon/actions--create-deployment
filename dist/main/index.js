@@ -35249,7 +35249,6 @@ function getFlatValues(values) {
 
 
 const context = enhancedContext();
-const octokit = github.getOctokit(getInput('token', { required: true }));
 /**
  * GitHub Actions bot user
  */
@@ -35380,7 +35379,7 @@ let _jobObject;
  * Get the current job from the workflow run
  * @returns the current job
  */
-async function getJobObject() {
+async function getJobObject(octokit) {
     if (_jobObject)
         return _jobObject;
     const workflowRunJobs = await octokit.paginate(octokit.rest.actions.listJobsForWorkflowRunAttempt, {
@@ -35396,7 +35395,7 @@ async function getJobObject() {
     const absoluteJobName = getAbsoluteJobName({
         job: context.job,
         matrix: getInput('#matrix', JobMatrixParser),
-        workflowContextChain: getInput('#workflow-context', WorkflowContextParser),
+        workflowContextChain: getInput('workflow-context', WorkflowContextParser),
     });
     const currentJob = workflowRunJobs.find((job) => job.name === absoluteJobName);
     if (!currentJob) {
@@ -35414,10 +35413,10 @@ let _deploymentObject;
  * Get the current deployment from the workflow run
  * @returns the current deployment or undefined
  */
-async function getDeploymentObject() {
+async function getDeploymentObject(octokit) {
     if (_deploymentObject)
         return _deploymentObject;
-    const job = await getJobObject();
+    const job = await getJobObject(octokit);
     // --- get deployments for current sha
     const potentialDeploymentsFromRestApi = await octokit.rest.repos.listDeployments({
         ...context.repo,
@@ -35473,6 +35472,7 @@ async function getDeploymentObject() {
     const currentDeploymentUrl = 
     // eslint-disable-next-line max-len
     `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/deployments/${currentDeployment.latestEnvironment}`;
+    const currentDeploymentWorkflowUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
     const deploymentObject = {
         ...currentDeployment,
         databaseId: undefined,
@@ -35480,7 +35480,7 @@ async function getDeploymentObject() {
         latestStatus: undefined,
         id: currentDeployment.databaseId,
         url: currentDeploymentUrl,
-        workflowUrl: context.runUrl,
+        workflowUrl: currentDeploymentWorkflowUrl,
         logUrl: currentDeployment.latestStatus.logUrl,
         environment: currentDeployment.latestEnvironment,
         environmentUrl: currentDeployment.latestStatus.environmentUrl || undefined,
@@ -35557,20 +35557,26 @@ const action = () => run(async () => {
         ref: getInput('ref', { required: true }),
         task: getInput('task'),
         environment: getInput('environment', { required: true }),
+        transientEnvironment: getInput('transient-environment', z.string().pipe(z.boolean())),
+        productionEnvironment: getInput('production-environment', z.string().pipe(z.boolean())),
         description: getInput('description'),
         payload: getInputTryJson('payload'),
+        autoInactive: getInput('auto-inactive', z.string().pipe(z.boolean())),
         status: getInput('status', DeploymentStatusSchema),
+        statusDescription: getInput('status-description'),
         environmentUrl: getInput('environment-url', z.string().url()),
         logUrl: getInput('log-url', z.string().url()),
     };
-    const logUrl = inputs.logUrl ?? await getJobObject()
-        .then((job) => job.html_url || action_main_getWorkflowRunHtmlUrl(context))
-        .catch((error) => {
-        core.warning(error.message);
-        core.warning('Fallback to workflow run URL'); // TODO better wording
-        return action_main_getWorkflowRunHtmlUrl(context);
-    });
     const octokit = github.getOctokit(inputs.token);
+    if (!inputs.logUrl) {
+        inputs.logUrl = await getJobObject(octokit)
+            .then((job) => job.html_url || action_main_getWorkflowRunHtmlUrl(context))
+            .catch((error) => {
+            core.warning(error.message);
+            core.warning('Fallback to workflow run URL'); // TODO better wording
+            return action_main_getWorkflowRunHtmlUrl(context);
+        });
+    }
     core.info('DEBUG: ' + JSON.stringify(inputs, null, 2));
     core.info(`Create deployment for environment ${inputs.environment}`);
     // https://docs.github.com/en/rest/deployments/deployments?apiVersion=2022-11-28#create-a-deployment
@@ -35581,11 +35587,11 @@ const action = () => run(async () => {
         required_contexts: [], // TODO
         task: inputs.task,
         environment: inputs.environment,
+        transient_environment: inputs.transientEnvironment,
+        production_environment: inputs.productionEnvironment,
         description: inputs.description,
         payload: inputs.payload,
-        auto_merge: false, // TODO
-        transient_environment: false, // TODO
-        production_environment: false, // TODO
+        auto_merge: false,
     });
     if (!('id' in deployment)) {
         core.setFailed(deployment.message ?? 'Failed to create create-deployment');
@@ -35600,9 +35606,9 @@ const action = () => run(async () => {
         ...parseRepository(inputs.repository),
         deployment_id: deployment.id,
         state: deploymentStatusState,
-        log_url: logUrl,
-        // description: inputs.description, // TODO
-        auto_inactive: false, // TODO
+        log_url: inputs.logUrl,
+        description: inputs.statusDescription,
+        auto_inactive: inputs.autoInactive ?? false,
         environment_url: inputs.environmentUrl,
     });
 });

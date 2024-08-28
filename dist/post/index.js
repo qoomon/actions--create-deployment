@@ -35249,7 +35249,6 @@ function common_getFlatValues(values) {
 
 
 const context = enhancedContext();
-const octokit = github.getOctokit(getInput('token', { required: true }));
 /**
  * GitHub Actions bot user
  */
@@ -35380,7 +35379,7 @@ let _jobObject;
  * Get the current job from the workflow run
  * @returns the current job
  */
-async function getJobObject() {
+async function getJobObject(octokit) {
     if (_jobObject)
         return _jobObject;
     const workflowRunJobs = await octokit.paginate(octokit.rest.actions.listJobsForWorkflowRunAttempt, {
@@ -35396,7 +35395,7 @@ async function getJobObject() {
     const absoluteJobName = getAbsoluteJobName({
         job: context.job,
         matrix: getInput('#matrix', JobMatrixParser),
-        workflowContextChain: getInput('#workflow-context', WorkflowContextParser),
+        workflowContextChain: getInput('workflow-context', WorkflowContextParser),
     });
     const currentJob = workflowRunJobs.find((job) => job.name === absoluteJobName);
     if (!currentJob) {
@@ -35414,10 +35413,10 @@ let _deploymentObject;
  * Get the current deployment from the workflow run
  * @returns the current deployment or undefined
  */
-async function getDeploymentObject() {
+async function getDeploymentObject(octokit) {
     if (_deploymentObject)
         return _deploymentObject;
-    const job = await getJobObject();
+    const job = await getJobObject(octokit);
     // --- get deployments for current sha
     const potentialDeploymentsFromRestApi = await octokit.rest.repos.listDeployments({
         ...context.repo,
@@ -35473,6 +35472,7 @@ async function getDeploymentObject() {
     const currentDeploymentUrl = 
     // eslint-disable-next-line max-len
     `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/deployments/${currentDeployment.latestEnvironment}`;
+    const currentDeploymentWorkflowUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
     const deploymentObject = {
         ...currentDeployment,
         databaseId: undefined,
@@ -35480,7 +35480,7 @@ async function getDeploymentObject() {
         latestStatus: undefined,
         id: currentDeployment.databaseId,
         url: currentDeploymentUrl,
-        workflowUrl: context.runUrl,
+        workflowUrl: currentDeploymentWorkflowUrl,
         logUrl: currentDeployment.latestStatus.logUrl,
         environment: currentDeployment.latestEnvironment,
         environmentUrl: currentDeployment.latestStatus.environmentUrl || undefined,
@@ -35551,7 +35551,7 @@ const action = () => run(async () => {
         token: getInput('token', { required: true }),
         repository: getInput('repository', { required: true }),
         autoClose: getInput('auto-close', JsonTransformer.pipe(z.boolean())),
-        jobStatus: getInput('#job-status', { required: true }),
+        jobStatus: getInput('#job-status', { required: true }, z["enum"](['success', 'failure', 'cancelled'])),
     };
     if (!inputs.autoClose) {
         core.debug('Skip Auto Close - Auto close is disabled');
@@ -35568,7 +35568,9 @@ const action = () => run(async () => {
         core.debug('Skip Auto Close - Deployment state is not in_progress');
         return;
     }
-    const deploymentStatusState = inputs.jobStatus === 'success' ? 'success' : 'failure'; // TODO error or failure
+    const deploymentStatusState = inputs.jobStatus === 'success'
+        ? 'success'
+        : 'failure';
     core.info(`Create deployment status '${deploymentStatusState}'`);
     await octokit.rest.repos.createDeploymentStatus({
         ...parseRepository(inputs.repository),
@@ -35577,8 +35579,7 @@ const action = () => run(async () => {
         environment: currentDeploymentStatus.environment,
         environment_url: currentDeploymentStatus.environment_url,
         log_url: currentDeploymentStatus.log_url,
-        // description: `GitHub Actions job status was ${inputs.jobStatus}`,// TODO set alike to github deployment created by using job environments
-        auto_inactive: true, // TODO
+        auto_inactive: deploymentStatusState === 'success',
     });
 });
 // Execute the action, if running as the main module

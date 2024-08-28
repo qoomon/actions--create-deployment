@@ -16,23 +16,30 @@ export const action = () => run(async () => {
     ref: getInput('ref', {required: true}),
     task: getInput('task'),
     environment: getInput('environment', {required: true}),
+    transientEnvironment: getInput('transient-environment', z.string().pipe(z.boolean())),
+    productionEnvironment: getInput('production-environment', z.string().pipe(z.boolean())),
     description: getInput('description'),
     payload: getInputTryJson('payload'),
+    autoInactive: getInput('auto-inactive', z.string().pipe(z.boolean())),
 
     status: getInput('status', DeploymentStatusSchema),
+    statusDescription: getInput('status-description'),
     environmentUrl: getInput('environment-url', z.string().url()),
     logUrl: getInput('log-url', z.string().url()),
   };
 
-  const logUrl = inputs.logUrl ?? await getJobObject()
-      .then((job) => job.html_url || getWorkflowRunHtmlUrl(context))
-      .catch((error) => {
-        core.warning(error.message)
-        core.warning('Fallback to workflow run URL') // TODO better wording
-        return getWorkflowRunHtmlUrl(context);
-      })
-
   const octokit = github.getOctokit(inputs.token)
+
+  if (!inputs.logUrl) {
+    inputs.logUrl = await getJobObject(octokit)
+        .then((job) => job.html_url || getWorkflowRunHtmlUrl(context))
+        .catch((error) => {
+          core.warning(error.message)
+          core.warning('Fallback to workflow run URL') // TODO better wording
+          return getWorkflowRunHtmlUrl(context);
+        })
+  }
+
   core.info('DEBUG: ' + JSON.stringify(inputs, null, 2))
   core.info(`Create deployment for environment ${inputs.environment}`)
   // https://docs.github.com/en/rest/deployments/deployments?apiVersion=2022-11-28#create-a-deployment
@@ -43,11 +50,11 @@ export const action = () => run(async () => {
     required_contexts: [], // TODO
     task: inputs.task,
     environment: inputs.environment,
+    transient_environment: inputs.transientEnvironment,
+    production_environment: inputs.productionEnvironment,
     description: inputs.description,
     payload: inputs.payload,
-    auto_merge: false, // TODO
-    transient_environment: false, // TODO
-    production_environment: false, // TODO
+    auto_merge: false,
   });
   if (!('id' in deployment)) {
     core.setFailed(deployment.message ?? 'Failed to create create-deployment')
@@ -65,10 +72,10 @@ export const action = () => run(async () => {
     deployment_id: deployment.id,
     state: deploymentStatusState,
 
-    log_url: logUrl,
+    log_url: inputs.logUrl,
 
-    // description: inputs.description, // TODO
-    auto_inactive: false, // TODO
+    description: inputs.statusDescription,
+    auto_inactive: inputs.autoInactive ?? false,
     environment_url: inputs.environmentUrl,
   })
 })

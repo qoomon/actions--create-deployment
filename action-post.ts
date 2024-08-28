@@ -3,7 +3,7 @@ import * as github from '@actions/github'
 // see https://github.com/actions/toolkit for more GitHub actions libraries
 import {getInput, run} from './lib/actions.js'
 import {fileURLToPath} from 'url'
-import {getLatestDeploymentStatus, parseRepository} from './lib/github';
+import {DeploymentStatus, getLatestDeploymentStatus, parseRepository} from './lib/github';
 import {z} from "zod";
 import {JsonTransformer} from "./lib/common";
 
@@ -16,7 +16,7 @@ export const action = () => run(async () => {
     token: getInput('token', {required: true}),
     repository: getInput('repository', {required: true}),
     autoClose: getInput('auto-close', JsonTransformer.pipe(z.boolean())),
-    jobStatus: getInput('#job-status', {required: true}),
+    jobStatus: getInput('#job-status', {required: true}, z.enum(['success', 'failure', 'cancelled'])),
   }
 
   if (!inputs.autoClose) {
@@ -38,7 +38,9 @@ export const action = () => run(async () => {
     return;
   }
 
-  const deploymentStatusState = inputs.jobStatus === 'success' ? 'success' : 'failure';  // TODO error or failure
+  const deploymentStatusState: DeploymentStatus = inputs.jobStatus === 'success'
+      ? 'success'
+      : 'failure';
   core.info(`Create deployment status '${deploymentStatusState}'`)
   await octokit.rest.repos.createDeploymentStatus({
     ...parseRepository(inputs.repository),
@@ -49,8 +51,7 @@ export const action = () => run(async () => {
     environment_url: currentDeploymentStatus.environment_url,
 
     log_url: currentDeploymentStatus.log_url,
-    // description: `GitHub Actions job status was ${inputs.jobStatus}`,// TODO set alike to github deployment created by using job environments
-    auto_inactive: true, // TODO
+    auto_inactive: deploymentStatusState === 'success',
   })
 })
 

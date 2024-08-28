@@ -6,10 +6,9 @@ import process from 'node:process';
 import {getFlatValues, JsonObject, JsonObjectSchema, JsonTransformer} from './common.js';
 import * as github from '@actions/github';
 import {Deployment} from '@octokit/graphql-schema';
+import {GitHub} from "@actions/github/lib/utils";
 
 export const context = enhancedContext()
-
-const octokit = github.getOctokit(getInput('token', {required: true}));
 
 /**
  * GitHub Actions bot user
@@ -86,9 +85,7 @@ export function getInput<T extends ZodSchema>(
  * @returns input value
  */
 export function getInput<T extends ZodSchema>(
-    name: string,
-    options: core.InputOptions,
-    schema: T
+    name: string, options: core.InputOptions, schema: T
 ): z.infer<T> | undefined
 
 /**
@@ -99,8 +96,7 @@ export function getInput<T extends ZodSchema>(
  * @returns input value
  */
 export function getInput<T extends ZodSchema>(
-    name: string,
-    schema: T
+    name: string, schema: T
 ): z.infer<T> | undefined
 
 export function getInput<T extends ZodSchema>(name: string, options_schema?: InputOptions | T, schema?: T): string | z.infer<T> | undefined {
@@ -227,7 +223,7 @@ let _jobObject: Awaited<ReturnType<typeof getJobObject>>
  * Get the current job from the workflow run
  * @returns the current job
  */
-export async function getJobObject(): Promise<typeof jobObject> {
+export async function getJobObject(octokit: InstanceType<typeof GitHub>): Promise<typeof jobObject> {
   if (_jobObject) return _jobObject
 
   const workflowRunJobs = await octokit.paginate(octokit.rest.actions.listJobsForWorkflowRunAttempt, {
@@ -244,7 +240,7 @@ export async function getJobObject(): Promise<typeof jobObject> {
   const absoluteJobName = getAbsoluteJobName({
     job: context.job,
     matrix: getInput('#matrix', JobMatrixParser),
-    workflowContextChain: getInput('#workflow-context', WorkflowContextParser),
+    workflowContextChain: getInput('workflow-context', WorkflowContextParser),
   })
 
   const currentJob = workflowRunJobs.find((job) => job.name === absoluteJobName)
@@ -266,10 +262,10 @@ let _deploymentObject: Awaited<ReturnType<typeof getDeploymentObject>>
  * Get the current deployment from the workflow run
  * @returns the current deployment or undefined
  */
-export async function getDeploymentObject(): Promise<typeof deploymentObject | undefined> {
+export async function getDeploymentObject(octokit: InstanceType<typeof GitHub>): Promise<typeof deploymentObject | undefined> {
   if (_deploymentObject) return _deploymentObject
 
-  const job = await getJobObject()
+  const job = await getJobObject(octokit)
 
   // --- get deployments for current sha
   const potentialDeploymentsFromRestApi = await octokit.rest.repos.listDeployments({
@@ -331,15 +327,17 @@ export async function getDeploymentObject(): Promise<typeof deploymentObject | u
   const currentDeploymentUrl =
       // eslint-disable-next-line max-len
       `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/deployments/${currentDeployment.latestEnvironment}`
+  const currentDeploymentWorkflowUrl =
+      `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
 
   const deploymentObject = {
     ...currentDeployment,
     databaseId: undefined,
     latestEnvironment: undefined,
     latestStatus: undefined,
-    id: currentDeployment.databaseId,
+    id: currentDeployment.databaseId!,
     url: currentDeploymentUrl,
-    workflowUrl: context.runUrl,
+    workflowUrl: currentDeploymentWorkflowUrl,
     logUrl: currentDeployment.latestStatus!.logUrl! as string,
     environment: currentDeployment.latestEnvironment!,
     environmentUrl: currentDeployment.latestStatus!.environmentUrl as string || undefined,

@@ -10,11 +10,9 @@ import {z} from "zod";
 import {JsonTransformer} from "../lib/common";
 
 export const action = () => run(async () => {
-  // TODO validate input
   const inputs = {
     token: getInput('token', {required: true}),
     repository: getInput('repository', {required: true}), // TODO get from file
-
     deploymentId: getInput('deployment-id', JsonTransformer.pipe(z.number().min(1) )) ?? await getDeploymentIdFromJobState(),
     state: getInput('state', {required: true}, DeploymentStatusSchema),
     description: getInput('description'),
@@ -45,6 +43,7 @@ export const action = () => run(async () => {
 })
 
 async function getDeploymentIdFromJobState() {
+  core.warning('env: ' + JSON.stringify(process.env, null, 2))
   const jobDeployments = await fs.promises.readFile(deploymentsFilePath)
       .then((buffer) => buffer.toString().split('\n').filter(line => line.trim().length > 0));
   if (jobDeployments.length === 0) {
