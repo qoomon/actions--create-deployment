@@ -8,6 +8,9 @@ on:
     branches:
       - main
 
+permissions: 
+  deployments: write
+
 jobs:
   example-auto-close-success:
     runs-on: ubuntu-latest
