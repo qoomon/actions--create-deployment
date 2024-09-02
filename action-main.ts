@@ -2,10 +2,10 @@ import * as core from '@actions/core'
 import * as github from '@actions/github'
 import {context, getInput, getJobObject, run} from './lib/actions.js'
 import {fileURLToPath} from 'url'
-import {DeploymentStatusSchema, parseRepository} from './lib/github';
+import {DeploymentStatusSchema, parseRepository} from './lib/github.js';
 import process from "node:process";
 import * as fs from "node:fs";
-import {deploymentsFilePath} from "./config";
+import {deploymentsFilePath} from './config.js';
 import {z} from "zod";
 
 export const action = () => run(async () => {

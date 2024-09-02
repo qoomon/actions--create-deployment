@@ -1,6 +1,7 @@
 import {z} from "zod";
 
 export type JsonLiteral = string | number | boolean | null
+// eslint-disable-next-line @typescript-eslint/consistent-type-definitions, @typescript-eslint/consistent-indexed-object-style
 export type JsonObject = { [key: string]: Json };
 export type Json = JsonLiteral | JsonObject | Json[]
 export const LiteralSchema: z.ZodType<JsonLiteral> = z.union([z.string(), z.number(), z.boolean(), z.null()])
@@ -39,4 +40,12 @@ export function getFlatValues(values: unknown): unknown[] {
   }
 
   return getFlatValues(Object.values(values))
+}
+
+/**
+ * Throws an error
+ * @param error
+ */
+export function _throw(error: unknown): never {
+  throw error
 }

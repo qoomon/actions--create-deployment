@@ -35254,8 +35254,49 @@ function common_getFlatValues(values) {
     }
     return common_getFlatValues(Object.values(values));
 }
+/**
+ * Throws an error
+ * @param error
+ */
+function common_throw(error) {
+    throw error;
+}
+
+;// CONCATENATED MODULE: ./lib/github.ts
+
+/**
+ * Parse repository string to owner and repo
+ * @param repository - repository string e.g. 'spongebob/sandbox'
+ * @return object with owner and repo
+ */
+function parseRepository(repository) {
+    const separatorIndex = repository.indexOf('/');
+    if (separatorIndex === -1)
+        throw Error(`Invalid repository format '${repository}'`);
+    return {
+        owner: repository.substring(0, separatorIndex),
+        repo: repository.substring(separatorIndex + 1),
+    };
+}
+async function getLatestDeploymentStatus(octokit, repository, deploymentId) {
+    return octokit.rest.repos.listDeploymentStatuses({
+        ...parseRepository(repository),
+        deployment_id: deploymentId,
+        per_page: 1,
+    }).then(({ data }) => {
+        if (data.length === 0)
+            return undefined;
+        return data[0];
+    });
+}
+const DeploymentStatusSchema = z["enum"](["error", "failure", "inactive", "in_progress", "queued", "pending", "success"]);
+function github_getWorkflowRunHtmlUrl(context) {
+    return `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}` +
+        (context.runAttempt ? `/attempts/${context.runAttempt}` : '');
+}
 
 ;// CONCATENATED MODULE: ./lib/actions.ts
+
 
 
 
@@ -35323,11 +35364,14 @@ function getInput(name, options_schema, schema) {
 function enhancedContext() {
     const context = github.context;
     const repository = `${context.repo.owner}/${context.repo.repo}`;
-    const runAttempt = parseInt((external_node_process_default()).env.GITHUB_RUN_ATTEMPT, 10);
+    const runAttempt = parseInt((external_node_process_default()).env.GITHUB_RUN_ATTEMPT
+        ?? common_throw(new Error('Missing environment variable: RUNNER_NAME')), 10);
     const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}` +
         (runAttempt ? `/attempts/${runAttempt}` : '');
-    const runnerName = (external_node_process_default()).env.RUNNER_NAME;
-    const runnerTempDir = (external_node_process_default()).env.RUNNER_TEMP;
+    const runnerName = (external_node_process_default()).env.RUNNER_NAME
+        ?? common_throw(new Error('Missing environment variable: RUNNER_NAME'));
+    const runnerTempDir = (external_node_process_default()).env.RUNNER_TEMP
+        ?? common_throw(new Error('Missing environment variable: RUNNER_TEMP'));
     const additionalContext = {
         repository,
         runAttempt,
@@ -35336,11 +35380,9 @@ function enhancedContext() {
         runnerTempDir,
     };
     return new Proxy(context, {
-        get(context, prop, receiver) {
+        get(context, prop) {
             return prop in context
-                // @ts-ignore
                 ? context[prop]
-                // @ts-ignore
                 : additionalContext[prop];
         },
     });
@@ -35485,16 +35527,19 @@ async function getDeploymentObject(octokit) {
     const currentDeploymentUrl = 
     // eslint-disable-next-line max-len
     `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/deployments/${currentDeployment.latestEnvironment}`;
-    const currentDeploymentWorkflowUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+    const currentDeploymentWorkflowUrl = getWorkflowRunHtmlUrl(context);
+    if (!currentDeployment.latestStatus) {
+        _throw(new Error('Missing deployment latestStatus'));
+    }
     const deploymentObject = {
         ...currentDeployment,
         databaseId: undefined,
         latestEnvironment: undefined,
         latestStatus: undefined,
-        id: currentDeployment.databaseId,
+        id: currentDeployment.databaseId ?? _throw(new Error('Missing deployment databaseId')),
         url: currentDeploymentUrl,
         workflowUrl: currentDeploymentWorkflowUrl,
-        logUrl: currentDeployment.latestStatus.logUrl,
+        logUrl: currentDeployment.latestStatus.logUrl || undefined,
         environment: currentDeployment.latestEnvironment,
         environmentUrl: currentDeployment.latestStatus.environmentUrl || undefined,
     };
@@ -35515,38 +35560,6 @@ function throwPermissionError(permission, options) {
 
 // EXTERNAL MODULE: external "url"
 var external_url_ = __nccwpck_require__(7310);
-;// CONCATENATED MODULE: ./lib/github.ts
-
-/**
- * Parse repository string to owner and repo
- * @param repository - repository string e.g. 'spongebob/sandbox'
- * @return object with owner and repo
- */
-function parseRepository(repository) {
-    const separatorIndex = repository.indexOf('/');
-    if (separatorIndex === -1)
-        throw Error(`Invalid repository format '${repository}'`);
-    return {
-        owner: repository.substring(0, separatorIndex),
-        repo: repository.substring(separatorIndex + 1),
-    };
-}
-async function getLatestDeploymentStatus(octokit, repository, deploymentId) {
-    return octokit.rest.repos.listDeploymentStatuses({
-        ...parseRepository(repository),
-        deployment_id: deploymentId,
-        per_page: 1,
-    }).then(({ data }) => {
-        if (data.length === 0)
-            return undefined;
-        return data[0];
-    });
-}
-const DeploymentStatusSchema = z["enum"](["error", "failure", "inactive", "in_progress", "queued", "pending", "success"]);
-function getWorkflowRunHtmlUrl(context) {
-    return `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}` + (context.runAttempt ? `/attempts/${context.runAttempt}` : '');
-}
-
 ;// CONCATENATED MODULE: ./action-post.ts
 
 

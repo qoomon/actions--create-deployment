@@ -3,9 +3,9 @@ import * as github from '@actions/github'
 // see https://github.com/actions/toolkit for more GitHub actions libraries
 import {getInput, run} from './lib/actions.js'
 import {fileURLToPath} from 'url'
-import {DeploymentStatus, getLatestDeploymentStatus, parseRepository} from './lib/github';
+import {DeploymentStatus, getLatestDeploymentStatus, parseRepository} from './lib/github.js';
 import {z} from "zod";
-import {JsonTransformer} from "./lib/common";
+import {JsonTransformer} from './lib/common.js';
 
 const state = {
   deploymentId: core.getState('deployment-id') ? parseInt(core.getState('deployment-id'), 10) : undefined,

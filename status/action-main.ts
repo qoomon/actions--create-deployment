@@ -2,22 +2,28 @@ import * as core from '@actions/core'
 import * as github from '@actions/github'
 import {context, getInput, run} from '../lib/actions.js'
 import {fileURLToPath} from 'url'
-import {DeploymentStatusSchema, getLatestDeploymentStatus, getWorkflowRunHtmlUrl, parseRepository} from '../lib/github';
+import {
+  DeploymentStatusSchema,
+  getLatestDeploymentStatus,
+  getWorkflowRunHtmlUrl,
+  parseRepository
+} from '../lib/github.js';
 import process from "node:process";
 import * as fs from "node:fs";
-import {deploymentsFilePath} from "../config";
+import {deploymentsFilePath} from "../config.js";
 import {z} from "zod";
-import {JsonTransformer} from "../lib/common";
+import {JsonTransformer} from "../lib/common.js";
 
 export const action = () => run(async () => {
   const inputs = {
     token: getInput('token', {required: true}),
     repository: getInput('repository', {required: true}), // TODO get from file
-    deploymentId: getInput('deployment-id', JsonTransformer.pipe(z.number().min(1) )) ?? await getDeploymentIdFromJobState(),
+    deploymentId: getInput('deployment-id', JsonTransformer.pipe(z.number().min(1)))
+        ?? await getDeploymentIdFromJobState(),
     state: getInput('state', {required: true}, DeploymentStatusSchema),
     description: getInput('description'),
     logUrl: getInput('log-url', z.string().url()),
-    environmentUrl: getInput('environment-url',z.string().url()),
+    environmentUrl: getInput('environment-url', z.string().url()),
     autoInactive: getInput('auto-inactive', JsonTransformer.pipe(z.boolean())),
   }
 

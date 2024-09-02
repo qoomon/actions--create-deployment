@@ -29,7 +29,9 @@ export async function getLatestDeploymentStatus(
   });
 }
 
-export const DeploymentStatusSchema = z.enum(["error", "failure", "inactive", "in_progress", "queued", "pending", "success"]);
+export const DeploymentStatusSchema = z.enum(
+    ["error", "failure", "inactive", "in_progress", "queued", "pending", "success"]
+);
 export type DeploymentStatus = z.infer<typeof DeploymentStatusSchema>;
 
 export function getWorkflowRunHtmlUrl(context: {
@@ -38,5 +40,6 @@ export function getWorkflowRunHtmlUrl(context: {
   runId: number,
   runAttempt?: number
 }) {
-  return `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}` + (context.runAttempt ? `/attempts/${context.runAttempt}` : '');
+  return `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}` +
+      (context.runAttempt ? `/attempts/${context.runAttempt}` : '');
 }
