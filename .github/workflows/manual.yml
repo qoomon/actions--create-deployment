@@ -15,7 +15,7 @@ jobs:
   example-auto-close:
     runs-on: ubuntu-latest
     steps:
-      - uses: qoomon/actions--create-deployment@main
+      - uses: qoomon/actions--create-deployment@v1
         with:
           environment: example-auto-close-success
           environment-url: https://example.com

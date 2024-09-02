@@ -36,9 +36,9 @@ inputs:
 
   # --- initial status ---
   state:
-    description: |
-      The initial status of the deployment
-      Valid values are "error", "failure", "inactive", "in_progress", "queued", "pending", or "success"
+    description: The initial status of the deployment
+    default: 'in_progress'
+    required: true
   environment-url:
     description: 'The environment URL of the deployment'
 

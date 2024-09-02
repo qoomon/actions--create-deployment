@@ -6,57 +6,114 @@ and will be closed  automatically at the end of job the deployment with status `
 
 ### Example
 
-```yaml
-jobs:
-  example:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: qoomon/actions--deployment@v1
-        with:
-          message: work work
-          skip-empty: true
+- Create a deployment for the current repository and ref with the environment `production`.
+  Deployment will be closed automatically at the end of the job.
+  ```yaml
+  jobs:
+    example:
+      runs-on: ubuntu-latest
+      steps:
+        - uses: qoomon/actions--create-deployment@v1
+          with:
+            environment: production
+  ```
+- Create a deployment for the current repository and ref with the environment `production`.
+  Set deployment status manually.
+  ```yaml
+  jobs:
+    example:
+      runs-on: ubuntu-latest
+      steps:
+        - uses: qoomon/actions--create-deployment@v1
+          with:
+            environment: production
 
-      - if: ${{ steps.commit.outputs.commit != null }}
-        run: git push
-```
+        - run: echo "Deployment is in progress..."
+
+        - uses: qoomon/actions--create-deployment/status@v1
+          with:
+            state: success
+  ```
 
 ### Inputs
 
-```yaml
-inputs:
-  message:
-    description: 'The commit message'
-    required: true
-  amend:
-    description: 'Amend the last commit'
-    default: false
-  allow-empty:
-    description: 'Allow an empty commit'
-    default: false
-  skip-empty:
-    description: 'Skip action, if nothing to commit'
-    default: false
+- action: qoomon/actions--create-deployment
+  ```yaml
+  inputs:
+    token:
+      description: 'A GitHub access token'
+      required: true
+      default: '${{ github.token }}'
 
-  token:
-    description: 'A GitHub access token'
-    required: true
-    default: ${{ github.token }}
-  working-directory:
-    description: 'The working directory'
-    required: true
-    default: '.'
-  remoteName:
-    description: 'The remote name to create the commit at.'
-    required: true
-    default: 'origin'
-```
+    repository:
+      description: 'The repository of the deployment'
+      required: true
+      default: '${{ github.repository }}'
+    ref:
+      description: 'The repository ref of the deployment'
+      required: true
+      default: '${{ github.ref }}'
+
+    task:
+      description: 'The task of the deployment'
+      default: 'deploy'
+    description:
+      description: 'The description of the deployment'
+    payload:
+      description: 'The payload of the deployment'
+    environment:
+      description: 'The environment of the deployment'
+    production-environment:
+      description: 'Specifies if the given environment is specific to the deployment and will no longer exist at some point in the future. Default: `false`'
+    transient-environment:
+      description: 'Specifies if the given environment is one that end-users directly interact with. Default: `true` when `environment` is `production` and `false` otherwise.'
+
+    # --- initial status ---
+    state:
+      description: The initial status of the deployment
+      default: 'in_progress'
+      required: true
+    environment-url:
+      description: 'The environment URL of the deployment'
+
+    # --- post run ---
+    auto-close:
+      description: 'Enable auto-close for the deployment'
+      default: 'true'
+  ```
+- action: qoomon/actions--create-deployment/**status**
+  ```yaml
+  inputs:
+    token:
+      description: 'A GitHub access token'
+      required: true
+      default: '${{ github.token }}'
+
+    repository:
+      description: 'The repository to target'
+      required: true
+      default: '${{ github.repository }}'
+    deployment-id:
+      description: 'The deployment id'
+
+    state:
+      description: |
+        The status of the deployment
+        Valid values are "error", "failure", "inactive", "in_progress", "queued", "pending", or "success"
+    description:
+      description: 'The description of the deployment status'
+    environment:
+      description: 'The environment of the deployment status'
+    environment-url:
+      description: 'The environment URL of the deployment status'
+  ```
 
 ### Outputs
 
 ```yaml
 outputs:
-  commit:
-    description: 'The commit hash, if a commit was created'
+  deployment-id:
+    description: 'The deployment id'
 ```
 
 ## Development
