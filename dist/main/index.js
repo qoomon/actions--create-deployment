@@ -1889,7 +1889,7 @@ class HttpClient {
         }
         const usingSsl = parsedUrl.protocol === 'https:';
         proxyAgent = new undici_1.ProxyAgent(Object.assign({ uri: proxyUrl.href, pipelining: !this._keepAlive ? 0 : 1 }, ((proxyUrl.username || proxyUrl.password) && {
-            token: `${proxyUrl.username}:${proxyUrl.password}`
+            token: `Basic ${Buffer.from(`${proxyUrl.username}:${proxyUrl.password}`).toString('base64')}`
         })));
         this._proxyAgentDispatcher = proxyAgent;
         if (usingSsl && this._ignoreSslError) {
@@ -2002,11 +2002,11 @@ function getProxyUrl(reqUrl) {
     })();
     if (proxyVar) {
         try {
-            return new URL(proxyVar);
+            return new DecodedURL(proxyVar);
         }
         catch (_a) {
             if (!proxyVar.startsWith('http://') && !proxyVar.startsWith('https://'))
-                return new URL(`http://${proxyVar}`);
+                return new DecodedURL(`http://${proxyVar}`);
         }
     }
     else {
@@ -2064,6 +2064,19 @@ function isLoopbackAddress(host) {
         hostLower.startsWith('127.') ||
         hostLower.startsWith('[::1]') ||
         hostLower.startsWith('[0:0:0:0:0:0:0:1]'));
+}
+class DecodedURL extends URL {
+    constructor(url, base) {
+        super(url, base);
+        this._decodedUsername = decodeURIComponent(super.username);
+        this._decodedPassword = decodeURIComponent(super.password);
+    }
+    get username() {
+        return this._decodedUsername;
+    }
+    get password() {
+        return this._decodedPassword;
+    }
 }
 //# sourceMappingURL=proxy.js.map
 
@@ -35562,14 +35575,16 @@ const action = () => run(async () => {
         description: getInput('description'),
         payload: getInputTryJson('payload'),
         autoInactive: getInput('auto-inactive', z.string().pipe(z.boolean())),
-        status: getInput('status', DeploymentStatusSchema),
-        statusDescription: getInput('status-description'),
-        environmentUrl: getInput('environment-url', z.string().url()),
-        logUrl: getInput('log-url', z.string().url()),
+        status: {
+            state: getInput('status-state', DeploymentStatusSchema) ?? 'in_progress',
+            description: getInput('status-description'),
+            environmentUrl: getInput('environment-url', z.string().url()),
+            logUrl: getInput('log-url', z.string().url()),
+        }
     };
     const octokit = github.getOctokit(inputs.token);
-    if (!inputs.logUrl) {
-        inputs.logUrl = await getJobObject(octokit)
+    if (!inputs.status.logUrl) {
+        inputs.status.logUrl = await getJobObject(octokit)
             .then((job) => job.html_url || action_main_getWorkflowRunHtmlUrl(context))
             .catch((error) => {
             core.warning(error.message);
@@ -35600,16 +35615,15 @@ const action = () => run(async () => {
     core.saveState('deployment-id', deployment.id);
     core.setOutput('deployment-id', deployment.id);
     await external_node_fs_namespaceObject.promises.appendFile(deploymentsFilePath, deployment.id + '\n');
-    const deploymentStatusState = inputs.status ?? 'in_progress';
-    core.info(`Create deployment status '${deploymentStatusState}'`);
+    core.info(`Create deployment status '${inputs.status.state}'`);
     await octokit.rest.repos.createDeploymentStatus({
         ...parseRepository(inputs.repository),
         deployment_id: deployment.id,
-        state: deploymentStatusState,
-        log_url: inputs.logUrl,
-        description: inputs.statusDescription,
+        state: inputs.status.state,
+        log_url: inputs.status.logUrl,
+        description: inputs.status.description,
         auto_inactive: inputs.autoInactive ?? false,
-        environment_url: inputs.environmentUrl,
+        environment_url: inputs.status.environmentUrl,
     });
 });
 function action_main_getWorkflowRunHtmlUrl(context) {

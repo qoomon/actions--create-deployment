@@ -22,16 +22,18 @@ export const action = () => run(async () => {
     payload: getInputTryJson('payload'),
     autoInactive: getInput('auto-inactive', z.string().pipe(z.boolean())),
 
-    status: getInput('status', DeploymentStatusSchema),
-    statusDescription: getInput('status-description'),
-    environmentUrl: getInput('environment-url', z.string().url()),
-    logUrl: getInput('log-url', z.string().url()),
+    status: {
+      state: getInput('status-state', DeploymentStatusSchema) ?? 'in_progress',
+      description: getInput('status-description'),
+      environmentUrl: getInput('environment-url', z.string().url()),
+      logUrl: getInput('log-url', z.string().url()),
+    }
   };
 
   const octokit = github.getOctokit(inputs.token)
 
-  if (!inputs.logUrl) {
-    inputs.logUrl = await getJobObject(octokit)
+  if (!inputs.status.logUrl) {
+    inputs.status.logUrl = await getJobObject(octokit)
         .then((job) => job.html_url || getWorkflowRunHtmlUrl(context))
         .catch((error) => {
           core.warning(error.message)
@@ -65,18 +67,17 @@ export const action = () => run(async () => {
   core.setOutput('deployment-id', deployment.id);
   await fs.promises.appendFile(deploymentsFilePath, deployment.id + '\n');
 
-  const deploymentStatusState = inputs.status ?? 'in_progress';
-  core.info(`Create deployment status '${deploymentStatusState}'`)
+  core.info(`Create deployment status '${inputs.status.state }'`)
   await octokit.rest.repos.createDeploymentStatus({
     ...parseRepository(inputs.repository),
     deployment_id: deployment.id,
-    state: deploymentStatusState,
+    state: inputs.status.state ,
 
-    log_url: inputs.logUrl,
+    log_url: inputs.status.logUrl,
 
-    description: inputs.statusDescription,
+    description: inputs.status.description,
     auto_inactive: inputs.autoInactive ?? false,
-    environment_url: inputs.environmentUrl,
+    environment_url: inputs.status.environmentUrl,
   })
 })
 
