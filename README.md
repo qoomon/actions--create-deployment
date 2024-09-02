@@ -1,95 +1,66 @@
-# Enhanced Job Context &nbsp; [![Actions](https://img.shields.io/badge/qoomon-GitHub%20Actions-blue)](https://github.com/qoomon/actions)
+# Create Deployment &nbsp; [![Actions](https://img.shields.io/badge/qoomon-GitHub%20Actions-blue)](https://github.com/qoomon/actions)
 
-This action provides an enhanced job context for GitHub Actions.
+This action will create a new deployment via GitHub API.
+By default, the deployment is created with the status `in_progress`
+and will be closed  automatically at the end of job the deployment with status `success` or `failure` depending on the job status.
 
-### Usage
-> [!Important]
-> For usage within a reusable workflow, see [Usage within Reusable Workflows](#usage-within-reusable-workflows)
+### Example
+
 ```yaml
 jobs:
   example:
     runs-on: ubuntu-latest
-    environment: playground
     steps:
-      - uses: qoomon/actions--context@v2
-        id: context
+      - uses: qoomon/actions--deployment@v1
+        with:
+          message: work work
+          skip-empty: true
 
-      - run: |
-          echo "Current Environment: ${{ steps.context.outputs.environment }}"
-          echo "Job Logs: ${{ steps.context.outputs.job_log_url }}"
+      - if: ${{ steps.commit.outputs.commit != null }}
+        run: git push
+```
+
+### Inputs
+
+```yaml
+inputs:
+  message:
+    description: 'The commit message'
+    required: true
+  amend:
+    description: 'Amend the last commit'
+    default: false
+  allow-empty:
+    description: 'Allow an empty commit'
+    default: false
+  skip-empty:
+    description: 'Skip action, if nothing to commit'
+    default: false
+
+  token:
+    description: 'A GitHub access token'
+    required: true
+    default: ${{ github.token }}
+  working-directory:
+    description: 'The working directory'
+    required: true
+    default: '.'
+  remoteName:
+    description: 'The remote name to create the commit at.'
+    required: true
+    default: 'origin'
 ```
 
 ### Outputs
+
 ```yaml
 outputs:
-  job:
-    description: The workflow job name of the current job.
-  job_id:
-    description: The workflow run job id of the current job.
-  job_log_url:
-    description: The HTML url of the job log for the current job.
-
-  run_id:
-    description: The workflow run id of the current job.
-  run_attempt:
-    description: The workflow run attempt of the current job.
-  run_number:
-    description: The workflow run number of the current job. Same as `github.run_number`.
-
-  environment:
-    description: The environment of the current job.
-  environment_url:
-    description: The environment HTML url of the current job.
-
-  deployment_id:
-    description: The deployment id of the current job.
-  deployment_url:
-    description: The deployment HTML url of the current job.
-  deployment_workflow_url:
-    description: The deployment workflow HTML url of the current job.
-  deployment_log_url:
-    description: The deployment log HTML url of the current job.
+  commit:
+    description: 'The commit hash, if a commit was created'
 ```
 
-### Usage within Reusable Workflows
+## Development
 
-##### Main Workflow
-```yaml
-jobs:
-  reusable-job:
-    strategy:
-      matrix:
-        node-version: [ 22.x, 20.x ]
-    uses: ./.github/workflows/example-reusable.yml
-    with:
-      # IMPORTANT ensure first value match the surrounding job name
-      # IMPORTANT If the surrounding workflow is a reusable workflow itself, append ', ${{ inputs.workflow-context }}'
-      workflow-context: '"reusable-job", ${{ toJSON(matrix) }}'
-```
+### Release New Action Version
 
-##### Reusable workflow
-```yaml
-on:
-  workflow_call:
-    inputs:
-      workflow-context:
-        type: string
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: qoomon/actions--context@v2
-        id: context
-        with:
-          workflow-context: '${{ inputs.workflow-context }}'
-
-      - run: |
-          echo "Current Environment: ${{ steps.context.outputs.environment }}"
-          echo "Job Logs: ${{ steps.context.outputs.job_log_url }}"
-```
-
-#### Release New Action Version
-- Trigger the [Release workflow](../../actions/workflows/release.yaml)
-  - The workflow will create a new release with the given version and also move the related major version tag e.g. `v1` to point to this new release
+Trigger [Release Version workflow](/actions/workflows/action-release.yaml)

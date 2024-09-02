@@ -35,19 +35,20 @@ inputs:
     description: 'Specifies if the given environment is one that end-users directly interact with. Default: `true` when `environment` is `production` and `false` otherwise.'
 
   # --- initial status ---
-  status-state:
+  state:
     description: |
       The initial status of the deployment
       Valid values are "error", "failure", "inactive", "in_progress", "queued", "pending", or "success"
-  status-description:
-    description: 'The description of the initial deployment status'
-  status-environment-url:
+  environment-url:
     description: 'The environment URL of the deployment'
 
   # --- post run ---
   auto-close:
     description: 'Enable auto-close for the deployment'
     default: 'true'
+  '#job-status':
+    description: 'DO NOT SET MANUALLY'
+    default: '${{ job.status }}'
 
   workflow-context:
     description: |
@@ -55,9 +56,6 @@ inputs:
   '#matrix':
     description: 'DO NOT SET MANUALLY'
     default: '${{ toJSON(matrix) }}'
-  '#job-status':
-    description: 'DO NOT SET MANUALLY'
-    default: '${{ job.status }}'
 
 outputs:
   deployment-id:
