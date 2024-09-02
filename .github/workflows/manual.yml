@@ -12,7 +12,7 @@ permissions:
   deployments: write
 
 jobs:
-  example-auto-close-success:
+  example-auto-close:
     runs-on: ubuntu-latest
     steps:
       - uses: qoomon/actions--create-deployment@main
@@ -22,18 +22,6 @@ jobs:
 
       - run: echo "Deploying..."
       - run: exit 0
-      - run: echo "...done!"
-
-  example-auto-close-failure:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: qoomon/actions--create-deployment@main
-        with:
-          environment: example-auto-close-failure
-          environment-url: https://example.com
-
-      - run: echo "Deploying..."
-      - run: exit 1
       - run: echo "...done!"
 
   example-manual:
