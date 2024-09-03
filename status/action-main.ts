@@ -9,17 +9,45 @@ import {
   parseRepository
 } from '../lib/github.js';
 import process from "node:process";
-import * as fs from "node:fs";
-import {deploymentsFilePath} from "../config.js";
 import {z} from "zod";
 import {JsonTransformer} from "../lib/common.js";
+import {getJobState} from "../action-job-sate";
 
 export const action = () => run(async () => {
+
+  let inputDeploymentId = getInput('deployment-id', JsonTransformer.pipe(z.number().min(1)));
+  let inputRepository = getInput('repository');
+
+  if(!inputRepository || !inputDeploymentId) {
+    const jobState = getJobState<{ repository: string, deploymentId: number }>()
+    if (jobState.length === 0) {
+      throw new Error('No deployment found for current job - Input required: repository, deployment-id');
+    }
+
+    const matchingJobStateEntries = jobState.filter((entry) =>
+        (!inputRepository || entry.repository === inputRepository) &&
+        (!inputDeploymentId || entry.deploymentId === inputDeploymentId)
+    )
+    if (matchingJobStateEntries.length === 0) {
+      throw new Error('No matching deployment found for current job with given inputs - Input: repository, deployment-id');
+    }
+    if (matchingJobStateEntries.length > 1) {
+      throw new Error('Ambiguous deployments found for current job - Input required: deployment-id');
+    }
+
+    const matchingJobStateEntry = matchingJobStateEntries[0];
+    if (inputRepository && matchingJobStateEntry.repository !== inputRepository) {
+      throw new Error('Deployment repository mismatch - Input: repository');
+    }
+
+    inputDeploymentId = jobState[0].deploymentId;
+    inputRepository = jobState[0].repository;
+  }
+
   const inputs = {
     token: getInput('token', {required: true}),
-    repository: getInput('repository', {required: true}), // TODO get from file
-    deploymentId: getInput('deployment-id', JsonTransformer.pipe(z.number().min(1)))
-        ?? await getDeploymentIdFromJobState(),
+    repository: inputRepository,
+    deploymentId: inputDeploymentId,
     state: getInput('state', {required: true}, DeploymentStatusSchema),
     description: getInput('description'),
     logUrl: getInput('log-url', z.string().url()),
@@ -47,19 +75,6 @@ export const action = () => run(async () => {
 
   core.setOutput('deployment-id', inputs.deploymentId)
 })
-
-async function getDeploymentIdFromJobState() {
-  core.warning('env: ' + JSON.stringify(process.env, null, 2))
-  const jobDeployments = await fs.promises.readFile(deploymentsFilePath)
-      .then((buffer) => buffer.toString().split('\n').filter(line => line.trim().length > 0));
-  if (jobDeployments.length === 0) {
-    throw new Error('No deployment - Input required: deployment-id');
-  }
-  if (jobDeployments.length > 1) {
-    throw new Error('Ambiguous deployments - Input required: deployment-id');
-  }
-  return parseInt(jobDeployments[0], 10);
-}
 
 // Execute the action, if running as the main module
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

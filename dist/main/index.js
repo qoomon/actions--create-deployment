@@ -35531,6 +35531,9 @@ async function getDeploymentObject(octokit) {
     if (!currentDeployment.latestStatus) {
         _throw(new Error('Missing deployment latestStatus'));
     }
+    if (!currentDeployment.latestEnvironment) {
+        _throw(new Error('Missing deployment latestEnvironment'));
+    }
     const deploymentObject = {
         ...currentDeployment,
         databaseId: undefined,
@@ -35562,12 +35565,22 @@ function throwPermissionError(permission, options) {
 var external_url_ = __nccwpck_require__(7310);
 ;// CONCATENATED MODULE: external "node:fs"
 const external_node_fs_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:fs");
-;// CONCATENATED MODULE: ./config.ts
+;// CONCATENATED MODULE: ./action-job-sate.ts
 
-const deploymentsFilePath = `${context.runnerTempDir}/action--create-deployment`;
+
+const STATE_FILE = `${context.runnerTempDir}/action--create-deployment`;
+function addJobState(obj) {
+    external_node_fs_namespaceObject.appendFileSync(STATE_FILE, JSON.stringify(obj) + '\n');
+}
+function getJobState() {
+    if (!fs.existsSync(STATE_FILE))
+        return [];
+    return fs.readFileSync(STATE_FILE).toString()
+        .split('\n').filter(line => line.trim().length > 0)
+        .map(line => JSON.parse(line));
+}
 
 ;// CONCATENATED MODULE: ./action-main.ts
-
 
 
 
@@ -35624,7 +35637,7 @@ const action = () => run(async () => {
     }
     core.saveState('deployment-id', deployment.id);
     core.setOutput('deployment-id', deployment.id);
-    await external_node_fs_namespaceObject.promises.appendFile(deploymentsFilePath, deployment.id + '\n');
+    addJobState({ repository: inputs.repository, deploymentId: deployment.id });
     core.info(`Create deployment status '${inputs.state}'`);
     await octokit.rest.repos.createDeploymentStatus({
         ...parseRepository(inputs.repository),

@@ -13,8 +13,6 @@ inputs:
 
   repository:
     description: 'The repository to target'
-    required: true
-    default: '${{ github.repository }}'
   deployment-id:
     description: 'The deployment id'
 

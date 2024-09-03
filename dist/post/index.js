@@ -35531,6 +35531,9 @@ async function getDeploymentObject(octokit) {
     if (!currentDeployment.latestStatus) {
         _throw(new Error('Missing deployment latestStatus'));
     }
+    if (!currentDeployment.latestEnvironment) {
+        _throw(new Error('Missing deployment latestEnvironment'));
+    }
     const deploymentObject = {
         ...currentDeployment,
         databaseId: undefined,

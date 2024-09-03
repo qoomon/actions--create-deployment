@@ -4,9 +4,8 @@ import {context, getInput, getJobObject, run} from './lib/actions.js'
 import {fileURLToPath} from 'url'
 import {DeploymentStatusSchema, parseRepository} from './lib/github.js';
 import process from "node:process";
-import * as fs from "node:fs";
-import {deploymentsFilePath} from './config.js';
 import {z} from "zod";
+import {addJobState} from "./action-job-sate";
 
 export const action = () => run(async () => {
   const inputs = {
@@ -61,13 +60,13 @@ export const action = () => run(async () => {
 
   core.saveState('deployment-id', deployment.id);
   core.setOutput('deployment-id', deployment.id);
-  await fs.promises.appendFile(deploymentsFilePath, deployment.id + '\n');
+  addJobState({repository: inputs.repository, deploymentId: deployment.id})
 
-  core.info(`Create deployment status '${inputs.state }'`)
+  core.info(`Create deployment status '${inputs.state}'`)
   await octokit.rest.repos.createDeploymentStatus({
     ...parseRepository(inputs.repository),
     deployment_id: deployment.id,
-    state: inputs.state ,
+    state: inputs.state,
 
     log_url: inputs.logUrl,
 

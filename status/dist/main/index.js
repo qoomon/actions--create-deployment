@@ -35531,6 +35531,9 @@ async function getDeploymentObject(octokit) {
     if (!currentDeployment.latestStatus) {
         _throw(new Error('Missing deployment latestStatus'));
     }
+    if (!currentDeployment.latestEnvironment) {
+        _throw(new Error('Missing deployment latestEnvironment'));
+    }
     const deploymentObject = {
         ...currentDeployment,
         databaseId: undefined,
@@ -35562,9 +35565,20 @@ function throwPermissionError(permission, options) {
 var external_url_ = __nccwpck_require__(7310);
 ;// CONCATENATED MODULE: external "node:fs"
 const external_node_fs_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:fs");
-;// CONCATENATED MODULE: ./config.ts
+;// CONCATENATED MODULE: ./action-job-sate.ts
 
-const deploymentsFilePath = `${context.runnerTempDir}/action--create-deployment`;
+
+const STATE_FILE = `${context.runnerTempDir}/action--create-deployment`;
+function addJobState(obj) {
+    fs.appendFileSync(STATE_FILE, JSON.stringify(obj) + '\n');
+}
+function getJobState() {
+    if (!external_node_fs_namespaceObject.existsSync(STATE_FILE))
+        return [];
+    return external_node_fs_namespaceObject.readFileSync(STATE_FILE).toString()
+        .split('\n').filter(line => line.trim().length > 0)
+        .map(line => JSON.parse(line));
+}
 
 ;// CONCATENATED MODULE: ./status/action-main.ts
 
@@ -35576,13 +35590,33 @@ const deploymentsFilePath = `${context.runnerTempDir}/action--create-deployment`
 
 
 
-
 const action = () => run(async () => {
+    let inputDeploymentId = getInput('deployment-id', JsonTransformer.pipe(z.number().min(1)));
+    let inputRepository = getInput('repository');
+    if (!inputRepository || !inputDeploymentId) {
+        const jobState = getJobState();
+        if (jobState.length === 0) {
+            throw new Error('No deployment found for current job - Input required: repository, deployment-id');
+        }
+        const matchingJobStateEntries = jobState.filter((entry) => (!inputRepository || entry.repository === inputRepository) &&
+            (!inputDeploymentId || entry.deploymentId === inputDeploymentId));
+        if (matchingJobStateEntries.length === 0) {
+            throw new Error('No matching deployment found for current job with given inputs - Input: repository, deployment-id');
+        }
+        if (matchingJobStateEntries.length > 1) {
+            throw new Error('Ambiguous deployments found for current job - Input required: deployment-id');
+        }
+        const matchingJobStateEntry = matchingJobStateEntries[0];
+        if (inputRepository && matchingJobStateEntry.repository !== inputRepository) {
+            throw new Error('Deployment repository mismatch - Input: repository');
+        }
+        inputDeploymentId = jobState[0].deploymentId;
+        inputRepository = jobState[0].repository;
+    }
     const inputs = {
         token: getInput('token', { required: true }),
-        repository: getInput('repository', { required: true }), // TODO get from file
-        deploymentId: getInput('deployment-id', JsonTransformer.pipe(z.number().min(1)))
-            ?? await getDeploymentIdFromJobState(),
+        repository: inputRepository,
+        deploymentId: inputDeploymentId,
         state: getInput('state', { required: true }, DeploymentStatusSchema),
         description: getInput('description'),
         logUrl: getInput('log-url', z.string().url()),
@@ -35605,18 +35639,6 @@ const action = () => run(async () => {
     });
     core.setOutput('deployment-id', inputs.deploymentId);
 });
-async function getDeploymentIdFromJobState() {
-    core.warning('env: ' + JSON.stringify((external_node_process_default()).env, null, 2));
-    const jobDeployments = await external_node_fs_namespaceObject.promises.readFile(deploymentsFilePath)
-        .then((buffer) => buffer.toString().split('\n').filter(line => line.trim().length > 0));
-    if (jobDeployments.length === 0) {
-        throw new Error('No deployment - Input required: deployment-id');
-    }
-    if (jobDeployments.length > 1) {
-        throw new Error('Ambiguous deployments - Input required: deployment-id');
-    }
-    return parseInt(jobDeployments[0], 10);
-}
 // Execute the action, if running as the main module
 if ((external_node_process_default()).argv[1] === (0,external_url_.fileURLToPath)(import.meta.url)) {
     action();

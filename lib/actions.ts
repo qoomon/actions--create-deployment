@@ -338,6 +338,9 @@ export async function getDeploymentObject(
   if (!currentDeployment.latestStatus) {
     _throw(new Error('Missing deployment latestStatus'))
   }
+  if (!currentDeployment.latestEnvironment) {
+    _throw(new Error('Missing deployment latestEnvironment'))
+  }
 
   const deploymentObject = {
     ...currentDeployment,
