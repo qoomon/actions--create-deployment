@@ -11,7 +11,7 @@ import {
 import process from "node:process";
 import {z} from "zod";
 import {JsonTransformer} from "../lib/common.js";
-import {getJobState} from "../action-job-sate";
+import {getJobState} from "../action-job-sate.js";
 
 export const action = () => run(async () => {
 
@@ -21,7 +21,8 @@ export const action = () => run(async () => {
   if(!inputRepository || !inputDeploymentId) {
     const jobState = getJobState<{ repository: string, deploymentId: number }>()
     if (jobState.length === 0) {
-      throw new Error('No deployment found for current job - Input required: repository, deployment-id');
+      throw new Error('No deployment found for current job - ' +
+          'Input required: repository, deployment-id');
     }
 
     const matchingJobStateEntries = jobState.filter((entry) =>
@@ -29,15 +30,18 @@ export const action = () => run(async () => {
         (!inputDeploymentId || entry.deploymentId === inputDeploymentId)
     )
     if (matchingJobStateEntries.length === 0) {
-      throw new Error('No matching deployment found for current job with given inputs - Input: repository, deployment-id');
+      throw new Error('No matching deployment found for current job with given inputs - ' +
+          'Input: repository, deployment-id');
     }
     if (matchingJobStateEntries.length > 1) {
-      throw new Error('Ambiguous deployments found for current job - Input required: deployment-id');
+      throw new Error('Ambiguous deployments found for current job - ' +
+          'Input required: deployment-id');
     }
 
     const matchingJobStateEntry = matchingJobStateEntries[0];
     if (inputRepository && matchingJobStateEntry.repository !== inputRepository) {
-      throw new Error('Deployment repository mismatch - Input: repository');
+      throw new Error('Deployment repository mismatch - ' +
+          'Input: repository');
     }
 
     inputDeploymentId = jobState[0].deploymentId;

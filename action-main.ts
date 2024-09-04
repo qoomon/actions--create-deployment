@@ -5,7 +5,7 @@ import {fileURLToPath} from 'url'
 import {DeploymentStatusSchema, parseRepository} from './lib/github.js';
 import process from "node:process";
 import {z} from "zod";
-import {addJobState} from "./action-job-sate";
+import {addJobState} from "./action-job-sate.js";
 
 export const action = () => run(async () => {
   const inputs = {
