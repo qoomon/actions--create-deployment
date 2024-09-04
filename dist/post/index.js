@@ -35456,9 +35456,9 @@ async function getJobObject(octokit) {
     if (!currentJob) {
         throw new Error(`Current job '${absoluteJobName}' could not be found in workflow run.\n` +
             'If this action is used within a reusable workflow, ensure that ' +
-            'action input \'#workflow-context\' is set correctly and ' +
-            'the \'#workflow-context\' job name matches the job name of the job name that uses the reusable workflow.');
-        // TODO better error message
+            'action input \'workflow-context\' is set to ${{ inputs.workflow-context }}' +
+            'and workflow input \'workflow-context\' was set to \'"CALLER_JOB_NAME", ${{ toJSON(matrix) }}\'' +
+            'or \'"CALLER_JOB_NAME", ${{ toJSON(matrix) }}, ${{ inputs.workflow-context }}\' in case of a nested workflow.');
     }
     const jobObject = { ...currentJob, };
     return _jobObject = jobObject;
