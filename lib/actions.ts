@@ -3,11 +3,12 @@ import {InputOptions} from '@actions/core'
 import {z, ZodSchema} from 'zod'
 import {Context} from '@actions/github/lib/context';
 import process from 'node:process';
-import {_throw, getFlatValues, JsonObject, JsonObjectSchema, JsonTransformer} from './common.js';
+import {_throw, getFlatValues, JsonObject, JsonObjectSchema, JsonParser} from './common.js';
 import * as github from '@actions/github';
 import {Deployment} from '@octokit/graphql-schema';
 import {GitHub} from "@actions/github/lib/utils";
 import {getWorkflowRunHtmlUrl} from "./github.js";
+import YAML from "yaml";
 
 export const context = enhancedContext()
 
@@ -104,6 +105,7 @@ export function getInput<T extends ZodSchema>(
     name: string, options_schema?: InputOptions | T, schema?: T
 ): string | z.infer<T> | undefined {
   let options: InputOptions | undefined
+  // noinspection SuspiciousTypeOfGuard
   if (options_schema instanceof ZodSchema) {
     schema = options_schema
   } else {
@@ -114,10 +116,32 @@ export function getInput<T extends ZodSchema>(
   if (!input) return undefined
   if (!schema) return input
 
-  const parseResult = schema.safeParse(input)
+  let parseResult = schema.safeParse(input)
+  if (parseResult.error) {
+    const initialIssue = parseResult.error.issues.at(0);
+    if (initialIssue?.code === "invalid_type" &&
+        initialIssue.received === "string" &&
+        initialIssue.expected !== "string"
+    ) {
+      // try parse as yaml/json
+      parseResult = z.string().transform((val, ctx) => {
+        try {
+          return YAML.parse(val);
+        } catch {
+          ctx.addIssue({
+            code: z.ZodIssueCode.invalid_type,
+            expected: initialIssue.expected,
+            received: 'unknown',
+          })
+          return z.NEVER;
+        }
+      }).pipe(schema).safeParse(input);
+    }
+  }
+
   if (parseResult.error) {
     const issues = parseResult.error.issues.map(formatZodIssue)
-    throw new Error(`Invalid value for input '${name}': ${input}\n` +
+    throw new Error(`Invalid input value for \`${name}\`, received \`${input}\`\n` +
         issues.map((it) => `  - ${it}`).join('\n'))
   }
 
@@ -187,8 +211,6 @@ function getAbsoluteJobName({job, matrix, workflowContextChain}: {
   return actualJobName
 }
 
-const JobMatrixParser = JsonTransformer.pipe(JsonObjectSchema.nullable())
-
 const WorkflowContextSchema = z.object({
   job: z.string(),
   matrix: JsonObjectSchema.nullable(),
@@ -197,7 +219,8 @@ const WorkflowContextSchema = z.object({
 type WorkflowContext = z.infer<typeof WorkflowContextSchema>
 
 const WorkflowContextParser = z.string()
-    .transform((str, ctx) => JsonTransformer.parse(`[${str}]`, ctx))
+    .transform((str) => `[${str}]`)
+    .transform(JsonParser.parse)
     .pipe(z.array(z.union([z.string(), JsonObjectSchema]).nullable()))
     .transform((contextChainArray, ctx) => {
       const contextChain: unknown[] = []
@@ -211,7 +234,7 @@ const WorkflowContextParser = z.string()
           return z.NEVER
         }
         let matrix;
-        if (typeof contextChainArray[0] === 'object') {
+        if (typeof contextChainArray.at(0) === 'object') {
           matrix = contextChainArray.shift()
         }
         contextChain.push({job, matrix})
@@ -243,7 +266,7 @@ export async function getJobObject(octokit: InstanceType<typeof GitHub>): Promis
 
   const absoluteJobName = getAbsoluteJobName({
     job: context.job,
-    matrix: getInput('#matrix', JobMatrixParser),
+    matrix: getInput('#matrix', JsonObjectSchema.nullable()),
     workflowContextChain: getInput('workflow-context', WorkflowContextParser),
   })
 

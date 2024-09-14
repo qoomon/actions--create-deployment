@@ -1,11 +1,10 @@
 import * as core from '@actions/core'
 import * as github from '@actions/github'
 // see https://github.com/actions/toolkit for more GitHub actions libraries
-import {getInput, run} from './lib/actions.js'
+import {getInput, run} from '../lib/actions'
 import {fileURLToPath} from 'url'
-import {DeploymentStatus, getLatestDeploymentStatus, parseRepository} from './lib/github.js';
+import {DeploymentStatus, getLatestDeploymentStatus, parseRepository} from '../lib/github';
 import {z} from "zod";
-import {JsonTransformer} from './lib/common.js';
 
 const state = {
   deploymentId: core.getState('deployment-id') ? parseInt(core.getState('deployment-id'), 10) : undefined,
@@ -15,7 +14,7 @@ export const action = () => run(async () => {
   const inputs = {
     token: getInput('token', {required: true}),
     repository: getInput('repository', {required: true}),
-    autoClose: getInput('auto-close', JsonTransformer.pipe(z.boolean())),
+    autoClose: getInput('auto-close', z.boolean()),
     jobStatus: getInput('#job-status', {required: true}, z.enum(['success', 'failure', 'cancelled'])),
   }
 

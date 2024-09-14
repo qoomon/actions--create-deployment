@@ -1,11 +1,11 @@
 import * as core from '@actions/core'
 import * as github from '@actions/github'
-import {context, getInput, getJobObject, run} from './lib/actions.js'
+import {context, getInput, getJobObject, run} from '../lib/actions'
 import {fileURLToPath} from 'url'
-import {DeploymentStatusSchema, parseRepository} from './lib/github.js';
+import {DeploymentStatusSchema, parseRepository} from '../lib/github';
 import process from "node:process";
 import {z} from "zod";
-import {addJobState} from "./action-job-sate.js";
+import {addJobState} from "../action-job-sate";
 
 export const action = () => run(async () => {
   const inputs = {
@@ -17,11 +17,11 @@ export const action = () => run(async () => {
     state: getInput('state', DeploymentStatusSchema) ?? 'in_progress',
     environment: getInput('environment', {required: true}),
     environmentUrl: getInput('environment-url', z.string().url()),
-    transientEnvironment: getInput('transient-environment', z.string().pipe(z.boolean())),
-    productionEnvironment: getInput('production-environment', z.string().pipe(z.boolean())),
+    transientEnvironment: getInput('transient-environment', z.boolean()),
+    productionEnvironment: getInput('production-environment', z.boolean()),
     description: getInput('description'),
     payload: getInputTryJson('payload'),
-    autoInactive: getInput('auto-inactive', z.string().pipe(z.boolean())),
+    autoInactive: getInput('auto-inactive', z.boolean()),
     logUrl: getInput('log-url', z.string().url()),
   };
 

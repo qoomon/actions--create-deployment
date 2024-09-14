@@ -2,7 +2,7 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
-    "build": "ncc build ./action-main.ts -o dist/main && ncc build ./action-post.ts -o dist/post && ncc build ./status/action-main.ts -o status/dist/main",
+    "build": "ncc build src/main.ts -o dist/main && ncc build src/post.ts -o dist/post && ncc build ./status/src/main.ts -o status/dist/main",
     "lint": "eslint .",
     "test": "NODE_OPTIONS='--experimental-vm-modules --no-warnings' jest --forceExit --detectOpenHandles",
     "ts-node": "NODE_OPTIONS='--require ts-node/register --loader ts-node/esm' node"
@@ -10,6 +10,7 @@
   "dependencies": {
     "@actions/core": "^1.10.1",
     "@actions/github": "^6.0.0",
+    "yaml": "^2.5.1",
     "zod": "^3.23.8"
   },
   "devDependencies": {
