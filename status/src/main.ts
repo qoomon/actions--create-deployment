@@ -1,21 +1,20 @@
 import * as core from '@actions/core'
 import * as github from '@actions/github'
-import {context, getInput, run} from '../lib/actions.js'
+import {context, getInput, run} from '../../lib/actions'
 import {fileURLToPath} from 'url'
 import {
   DeploymentStatusSchema,
   getLatestDeploymentStatus,
   getWorkflowRunHtmlUrl,
   parseRepository
-} from '../lib/github.js';
+} from '../../lib/github';
 import process from "node:process";
 import {z} from "zod";
-import {JsonTransformer} from "../lib/common.js";
-import {getJobState} from "../action-job-sate.js";
+import {getJobState} from "../../src/job-sate";
 
 export const action = () => run(async () => {
 
-  let inputDeploymentId = getInput('deployment-id', JsonTransformer.pipe(z.number().min(1)));
+  let inputDeploymentId = getInput('deployment-id', z.number().min(1));
   let inputRepository = getInput('repository');
 
   if(!inputRepository || !inputDeploymentId) {
@@ -56,7 +55,7 @@ export const action = () => run(async () => {
     description: getInput('description'),
     logUrl: getInput('log-url', z.string().url()),
     environmentUrl: getInput('environment-url', z.string().url()),
-    autoInactive: getInput('auto-inactive', JsonTransformer.pipe(z.boolean())),
+    autoInactive: getInput('auto-inactive', z.boolean()),
   }
 
   const octokit = github.getOctokit(inputs.token)

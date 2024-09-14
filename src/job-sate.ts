@@ -1,4 +1,4 @@
-import {context} from './lib/actions.js';
+import {context} from '../lib/actions';
 import * as fs from "node:fs";
 
 const STATE_FILE = `${context.runnerTempDir}/action--create-deployment`

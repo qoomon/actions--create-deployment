@@ -50,12 +50,14 @@ inputs:
     description: 'DO NOT SET MANUALLY'
     default: '${{ job.status }}'
 
-  workflow-context:
-    description: |
-      Workflow context e.g. '"<REUSABLE_WORKFLOW_JOB_NAME>", $ {{ toJSON(matrix) }}'
-  '#matrix':
+  # --- Workarounds for missing GitHub Actions context variables ---
+  job-name:
+    default: '${{ github.job }}'
+  '#job-matrix':
     description: 'DO NOT SET MANUALLY'
     default: '${{ toJSON(matrix) }}'
+  workflow-context:
+    description: '<REUSABLE_WORKFLOW_JOB_NAME>, $ {{ toJSON(matrix) }}'
 
 outputs:
   deployment-id:

@@ -3,11 +3,12 @@ import {InputOptions} from '@actions/core'
 import {z, ZodSchema} from 'zod'
 import {Context} from '@actions/github/lib/context';
 import process from 'node:process';
-import {_throw, getFlatValues, JsonObject, JsonObjectSchema, JsonTransformer} from './common.js';
+import {_throw, getFlatValues, JsonObject, JsonObjectSchema, JsonParser, YamlParser} from './common.js';
 import * as github from '@actions/github';
 import {Deployment} from '@octokit/graphql-schema';
 import {GitHub} from "@actions/github/lib/utils";
 import {getWorkflowRunHtmlUrl} from "./github.js";
+import YAML from "yaml";
 
 export const context = enhancedContext()
 
@@ -104,6 +105,7 @@ export function getInput<T extends ZodSchema>(
     name: string, options_schema?: InputOptions | T, schema?: T
 ): string | z.infer<T> | undefined {
   let options: InputOptions | undefined
+  // noinspection SuspiciousTypeOfGuard
   if (options_schema instanceof ZodSchema) {
     schema = options_schema
   } else {
@@ -114,10 +116,32 @@ export function getInput<T extends ZodSchema>(
   if (!input) return undefined
   if (!schema) return input
 
-  const parseResult = schema.safeParse(input)
+  let parseResult = schema.safeParse(input)
+  if (parseResult.error) {
+    const initialIssue = parseResult.error.issues.at(0);
+    if (initialIssue?.code === "invalid_type" &&
+        initialIssue.received === "string" &&
+        initialIssue.expected !== "string"
+    ) {
+      // try parse as yaml/json
+      parseResult = z.string().transform((val, ctx) => {
+        try {
+          return YAML.parse(val);
+        } catch {
+          ctx.addIssue({
+            code: z.ZodIssueCode.invalid_type,
+            expected: initialIssue.expected,
+            received: 'unknown',
+          })
+          return z.NEVER;
+        }
+      }).pipe(schema).safeParse(input);
+    }
+  }
+
   if (parseResult.error) {
     const issues = parseResult.error.issues.map(formatZodIssue)
-    throw new Error(`Invalid value for input '${name}': ${input}\n` +
+    throw new Error(`Invalid input value for \`${name}\`, received \`${input}\`\n` +
         issues.map((it) => `  - ${it}`).join('\n'))
   }
 
@@ -140,6 +164,12 @@ function enhancedContext() {
   const context = github.context
 
   const repository = `${context.repo.owner}/${context.repo.repo}`;
+
+  const workflowRef = process.env.GITHUB_WORKFLOW_REF
+      ?? _throw(new Error('Missing environment variable: GITHUB_WORKFLOW_REF'))
+  const workflowSha = process.env.GITHUB_WORKFLOW_SHA
+      ?? _throw(new Error('Missing environment variable: GITHUB_WORKFLOW_SHA'))
+
   const runAttempt = parseInt(process.env.GITHUB_RUN_ATTEMPT
       ?? _throw(new Error('Missing environment variable: RUNNER_NAME')), 10);
   const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}` +
@@ -151,6 +181,10 @@ function enhancedContext() {
 
   const additionalContext = {
     repository,
+
+    workflowRef,
+    workflowSha,
+
     runAttempt,
     runUrl,
     runnerName,
@@ -187,7 +221,7 @@ function getAbsoluteJobName({job, matrix, workflowContextChain}: {
   return actualJobName
 }
 
-const JobMatrixParser = JsonTransformer.pipe(JsonObjectSchema.nullable())
+const JobMatrixParser = JsonParser.pipe(JsonObjectSchema.nullable())
 
 const WorkflowContextSchema = z.object({
   job: z.string(),
@@ -197,7 +231,7 @@ const WorkflowContextSchema = z.object({
 type WorkflowContext = z.infer<typeof WorkflowContextSchema>
 
 const WorkflowContextParser = z.string()
-    .transform((str, ctx) => JsonTransformer.parse(`[${str}]`, ctx))
+    .transform((str, ctx) => YamlParser.parse(`[${str}]`, ctx))
     .pipe(z.array(z.union([z.string(), JsonObjectSchema]).nullable()))
     .transform((contextChainArray, ctx) => {
       const contextChain: unknown[] = []
@@ -230,6 +264,12 @@ let _jobObject: Awaited<ReturnType<typeof getJobObject>>
 export async function getJobObject(octokit: InstanceType<typeof GitHub>): Promise<typeof jobObject> {
   if (_jobObject) return _jobObject
 
+  const absoluteJobName = getAbsoluteJobName({
+    job: getInput('job-name', {required: true}),
+    matrix: getInput('#job-matrix', JobMatrixParser),
+    workflowContextChain: getInput('workflow-context', WorkflowContextParser),
+  })
+
   const workflowRunJobs = await octokit.paginate(octokit.rest.actions.listJobsForWorkflowRunAttempt, {
     ...context.repo,
     run_id: context.runId,
@@ -239,12 +279,6 @@ export async function getJobObject(octokit: InstanceType<typeof GitHub>): Promis
       throwPermissionError({scope: 'actions', permission: 'read'}, error)
     }
     throw error
-  })
-
-  const absoluteJobName = getAbsoluteJobName({
-    job: context.job,
-    matrix: getInput('#matrix', JobMatrixParser),
-    workflowContextChain: getInput('workflow-context', WorkflowContextParser),
   })
 
   const currentJob = workflowRunJobs.find((job) => job.name === absoluteJobName)
@@ -371,6 +405,3 @@ export function throwPermissionError(permission: { scope: string; permission: st
       'https://docs.github.com/en/actions/security-guides/automatic-token-authentication#modifying-the-permissions-for-the-github_token',
       options)
 }
-
-
-// TODO function to store and read job state
