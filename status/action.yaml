@@ -12,11 +12,13 @@ inputs:
     default: '${{ github.token }}'
 
   repository:
-    description: 'The repository to target'
-    required: true
-    default: '${{ github.repository }}'
+    description: |
+      The repository to target
+      Defaults to current deployment of job or the repository of the workflow run
   deployment-id:
-    description: 'The deployment id, defaults to current deployment of job'
+    description: |
+      The deployment id
+      Defaults to current deployment of job
 
   state:
     description: |

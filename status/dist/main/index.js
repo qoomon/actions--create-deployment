@@ -44041,28 +44041,33 @@ function getJobState() {
 
 
 const action = () => run(async () => {
-    let inputDeploymentId = getInput('deployment-id', z.number().min(1));
+    const jobState = getJobState();
     let inputRepository = getInput('repository');
-    if (!inputRepository || !inputDeploymentId) {
-        const jobState = getJobState();
+    let inputDeploymentId = getInput('deployment-id', z.number().min(1));
+    if (inputDeploymentId) {
+        if (!inputRepository) {
+            const matchingJobState = jobState
+                .filter((entry) => entry.deploymentId === inputDeploymentId);
+            if (matchingJobState.length === 0) {
+                inputRepository = context.repository;
+            }
+            else if (matchingJobState.length === 1) {
+                inputRepository = matchingJobState[0].repository;
+            }
+            else {
+                throw new Error('Ambiguous deployments found for current job. Input required: repository');
+            }
+        }
+    }
+    else {
+        if (inputRepository) { // && !inputDeploymentId
+            throw new Error('Input required: deployment-id');
+        }
         if (jobState.length === 0) {
-            throw new Error('No deployment found for current job - ' +
-                'Input required: repository, deployment-id');
+            throw new Error('No deployment found for current job. Input required: repository, deployment-id');
         }
-        const matchingJobStateEntries = jobState.filter((entry) => (!inputRepository || entry.repository === inputRepository) &&
-            (!inputDeploymentId || entry.deploymentId === inputDeploymentId));
-        if (matchingJobStateEntries.length === 0) {
-            throw new Error('No matching deployment found for current job with given inputs - ' +
-                'Input: repository, deployment-id');
-        }
-        if (matchingJobStateEntries.length > 1) {
-            throw new Error('Ambiguous deployments found for current job - ' +
-                'Input required: deployment-id');
-        }
-        const matchingJobStateEntry = matchingJobStateEntries[0];
-        if (inputRepository && matchingJobStateEntry.repository !== inputRepository) {
-            throw new Error('Deployment repository mismatch - ' +
-                'Input: repository');
+        if (jobState.length > 1) {
+            throw new Error('Ambiguous deployments found for current job. Input required: deployment-id');
         }
         inputDeploymentId = jobState[0].deploymentId;
         inputRepository = jobState[0].repository;
