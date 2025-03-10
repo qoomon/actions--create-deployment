@@ -1,6 +1,6 @@
 import * as core from '@actions/core'
 import * as github from '@actions/github'
-import {context, getInput, getJobObject, run} from '../lib/actions'
+import {context, getInput, getCurrentJob, run} from '../lib/actions'
 import {fileURLToPath} from 'url'
 import {DeploymentStatusSchema, parseRepository} from '../lib/github';
 import process from "node:process";
@@ -28,13 +28,8 @@ export const action = () => run(async () => {
   const octokit = github.getOctokit(inputs.token)
 
   if (!inputs.logUrl) {
-    inputs.logUrl = await getJobObject(octokit)
-        .then((job) => job.html_url || getWorkflowRunHtmlUrl(context))
-        .catch((error) => {
-          core.warning(error.message)
-          core.warning('Fallback to workflow run URL') // TODO better wording
-          return getWorkflowRunHtmlUrl(context);
-        })
+    const currentJob = await getCurrentJob(octokit);
+    inputs.logUrl = currentJob.html_url || getWorkflowRunHtmlUrl(context);
   }
 
   core.info('DEBUG: ' + JSON.stringify(inputs, null, 2))
