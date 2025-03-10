@@ -1,6 +1,6 @@
 import * as core from '@actions/core'
 import * as github from '@actions/github'
-import {context, getInput, run} from '../../lib/actions'
+import {context, getInput, getJobState, run} from '../../lib/actions'
 import {fileURLToPath} from 'url'
 import {
   DeploymentStatusSchema,
@@ -10,7 +10,6 @@ import {
 } from '../../lib/github';
 import process from "node:process";
 import {z} from "zod";
-import {getJobState} from "../../src/job-sate";
 
 export const action = () => run(async () => {
   const jobState = getJobState<{ repository: string, deploymentId: number }>();

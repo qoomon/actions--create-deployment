@@ -3,12 +3,14 @@ import {InputOptions} from '@actions/core'
 import {z, ZodSchema} from 'zod'
 import {Context} from '@actions/github/lib/context';
 import process from 'node:process';
-import {_throw, getFlatValues, JsonObject, JsonObjectSchema, JsonParser, YamlParser} from './common.js';
+import {_throw, sleep} from './common.js';
 import * as github from '@actions/github';
 import {Deployment} from '@octokit/graphql-schema';
 import {GitHub} from "@actions/github/lib/utils";
 import {getWorkflowRunHtmlUrl} from "./github.js";
 import YAML from "yaml";
+import {GetResponseDataTypeFromEndpointMethod} from "@octokit/types";
+import fs from "node:fs";
 
 export const context = enhancedContext()
 
@@ -174,6 +176,7 @@ function enhancedContext() {
       ?? _throw(new Error('Missing environment variable: RUNNER_NAME')), 10);
   const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}` +
       (runAttempt ? `/attempts/${runAttempt}` : '');
+
   const runnerName = process.env.RUNNER_NAME
       ?? _throw(new Error('Missing environment variable: RUNNER_NAME'));
   const runnerTempDir = process.env.RUNNER_TEMP
@@ -200,113 +203,77 @@ function enhancedContext() {
   }) as Context & typeof additionalContext
 }
 
-function getAbsoluteJobName({job, matrix, workflowContextChain}: {
-  job: string
-  matrix?: JsonObject | null
-  workflowContextChain?: WorkflowContext[]
-}) {
-  let actualJobName = job
-  if (matrix) {
-    const flatValues = getFlatValues(matrix)
-    if (flatValues.length > 0) {
-      actualJobName = `${actualJobName} (${flatValues.join(', ')})`
-    }
-  }
-
-  workflowContextChain?.forEach((workflowContext) => {
-    const contextJob = getAbsoluteJobName(workflowContext)
-    actualJobName = `${contextJob} / ${actualJobName}`
-  })
-
-  return actualJobName
-}
-
-const JobMatrixParser = JsonParser.pipe(JsonObjectSchema.nullable())
-
-const WorkflowContextSchema = z.object({
-  job: z.string(),
-  matrix: JsonObjectSchema.nullable(),
-}).strict()
-
-type WorkflowContext = z.infer<typeof WorkflowContextSchema>
-
-const WorkflowContextParser = z.string()
-    .transform((str, ctx) => YamlParser.parse(`[${str}]`, ctx))
-    .pipe(z.array(z.union([z.string(), JsonObjectSchema]).nullable()))
-    .transform((contextChainArray, ctx) => {
-      const contextChain: unknown[] = []
-      while (contextChainArray.length > 0) {
-        const job = contextChainArray.shift()
-        if (typeof job !== 'string') {
-          ctx.addIssue({
-            code: 'custom',
-            message: `Value must match the schema: "<JOB_NAME>", [<MATRIX_JSON>], [<JOB_NAME>", [<MATRIX_JSON>], ...]`,
-          })
-          return z.NEVER
-        }
-        let matrix;
-        if (typeof contextChainArray[0] === 'object') {
-          matrix = contextChainArray.shift()
-        }
-        contextChain.push({job, matrix})
-      }
-      return contextChain
-    })
-    .pipe(z.array(WorkflowContextSchema))
-
-
-let _jobObject: Awaited<ReturnType<typeof getJobObject>>
+// cache of getCurrentJob result
+let _currentJobObject: Awaited<ReturnType<typeof getCurrentJob>>
 
 /**
  * Get the current job from the workflow run
  * @returns the current job
  */
-export async function getJobObject(octokit: InstanceType<typeof GitHub>): Promise<typeof jobObject> {
-  if (_jobObject) return _jobObject
+export async function getCurrentJob(octokit: InstanceType<typeof GitHub>): Promise<typeof currentJobObject> {
+  if (_currentJobObject) return _currentJobObject
 
-  const absoluteJobName = getAbsoluteJobName({
-    job: getInput('job-name', {required: true}),
-    matrix: getInput('#job-matrix', JobMatrixParser),
-    workflowContextChain: getInput('workflow-context', WorkflowContextParser),
-  })
+  let currentJobs = [] as GetResponseDataTypeFromEndpointMethod<
+      typeof octokit.rest.actions.listJobsForWorkflowRunAttempt
+  >['jobs'];
 
-  const workflowRunJobs = await octokit.paginate(octokit.rest.actions.listJobsForWorkflowRunAttempt, {
-    ...context.repo,
-    run_id: context.runId,
-    attempt_number: context.runAttempt,
-  }).catch((error) => {
-    if (error.status === 403) {
-      throwPermissionError({scope: 'actions', permission: 'read'}, error)
+  // retry until current job is found, because it may take some time until the job is available through the GitHub API
+  let tryCount = 0;
+  const tryCountMax = 30;
+  const tryDelay = 1000;
+  do {
+    tryCount++
+    if (tryCount > 1) {
+      await sleep(tryDelay);
     }
-    throw error
-  })
 
-  const currentJob = workflowRunJobs.find((job) => job.name === absoluteJobName)
-  if (!currentJob) {
-    throw new Error(`Current job '${absoluteJobName}' could not be found in workflow run.\n` +
-        'If this action is used within a reusable workflow, ensure that ' +
-        'action input \'workflow-context\' is set to ${{ inputs.workflow-context }}' +
-        'and workflow input \'workflow-context\' was set to \'"CALLER_JOB_NAME", ${{ toJSON(matrix) }}\'' +
-        'or \'"CALLER_JOB_NAME", ${{ toJSON(matrix) }}, ${{ inputs.workflow-context }}\' in case of a nested workflow.'
-    )
+    const workflowRunJobs = await octokit.paginate(octokit.rest.actions.listJobsForWorkflowRunAttempt, {
+      ...context.repo,
+      run_id: context.runId,
+      attempt_number: context.runAttempt,
+    }).catch((error) => {
+      if (error.status === 403) {
+        throwPermissionError({scope: 'actions', permission: 'read'}, error)
+      }
+      throw error
+    })
+
+    currentJobs = workflowRunJobs
+        .filter((job) => job.status === "in_progress")
+        .filter((job) => {
+          if(job.runner_name === "GitHub Actions") {
+            const contextRunnerId = parseInt(context.runnerName.match(/(?<id>\d+)$/)?.groups?.id ?? '0', 10);
+            return job.runner_id === contextRunnerId;
+          }
+          return job.runner_name === context.runnerName;
+        });
+  } while (currentJobs.length !== 1 && tryCount < tryCountMax)
+
+  if (currentJobs.length !== 1) {
+    if (currentJobs.length === 0) {
+      throw new Error(`Current job could not be found in workflow run.`);
+    } else {
+      throw new Error(`Current job could not be uniquely identified in workflow run.`);
+    }
   }
 
-  const jobObject = {...currentJob,}
-  return _jobObject = jobObject;
+  const currentJobObject = {...currentJobs[0]}
+  return _currentJobObject = currentJobObject;
 }
 
-let _deploymentObject: Awaited<ReturnType<typeof getDeploymentObject>>
+// cache of getCurrentJob result
+let _currentDeploymentObject: Awaited<ReturnType<typeof getCurrentDeployment>>
 
 /**
  * Get the current deployment from the workflow run
  * @returns the current deployment or undefined
  */
-export async function getDeploymentObject(
+export async function getCurrentDeployment(
     octokit: InstanceType<typeof GitHub>
 ): Promise<typeof deploymentObject | undefined> {
-  if (_deploymentObject) return _deploymentObject
+  if (_currentDeploymentObject) return _currentDeploymentObject
 
-  const job = await getJobObject(octokit)
+  const currentJob = await getCurrentJob(octokit)
 
   // --- get deployments for current sha
   const potentialDeploymentsFromRestApi = await octokit.rest.repos.listDeployments({
@@ -324,7 +291,7 @@ export async function getDeploymentObject(
 
   // --- get deployment workflow job run id
   // noinspection GraphQLUnresolvedReference
-  const potentialDeploymentsFromGrapqlApi = await octokit.graphql<{ nodes: Deployment[] }>(`
+  const potentialDeploymentsFromGraphqlApi = await octokit.graphql<{ nodes: Deployment[] }>(`
     query ($ids: [ID!]!) {
       nodes(ids: $ids) {
         ... on Deployment {
@@ -348,7 +315,7 @@ export async function getDeploymentObject(
       .filter((deployment) => deployment.task === 'deploy')
       .filter((deployment) => deployment.state === 'IN_PROGRESS'))
 
-  const currentDeployment = potentialDeploymentsFromGrapqlApi.find((deployment) => {
+  const currentDeployment = potentialDeploymentsFromGraphqlApi.find((deployment) => {
     if (!deployment.latestStatus?.logUrl) return false
     const logUrl = new URL(deployment.latestStatus.logUrl)
 
@@ -360,7 +327,7 @@ export async function getDeploymentObject(
     return pathnameMatch &&
         pathnameMatch.groups?.repository === `${context.repo.owner}/${context.repo.repo}` &&
         pathnameMatch.groups?.run_id === context.runId.toString() &&
-        pathnameMatch.groups?.job_id === job.id.toString()
+        pathnameMatch.groups?.job_id === currentJob.id.toString()
   })
 
   if (!currentDeployment) return undefined
@@ -371,10 +338,10 @@ export async function getDeploymentObject(
   const currentDeploymentWorkflowUrl = getWorkflowRunHtmlUrl(context);
 
   if (!currentDeployment.latestStatus) {
-    _throw(new Error('Missing deployment latestStatus'))
+    throw new Error('Missing deployment latestStatus');
   }
   if (!currentDeployment.latestEnvironment) {
-    _throw(new Error('Missing deployment latestEnvironment'))
+    throw new Error('Missing deployment latestEnvironment');
   }
 
   const deploymentObject = {
@@ -389,7 +356,7 @@ export async function getDeploymentObject(
     environment: currentDeployment.latestEnvironment,
     environmentUrl: currentDeployment.latestStatus.environmentUrl as string || undefined,
   }
-  return _deploymentObject = deploymentObject
+  return _currentDeploymentObject = deploymentObject
 }
 
 /**
@@ -399,9 +366,43 @@ export async function getDeploymentObject(
  * @returns void
  */
 export function throwPermissionError(permission: { scope: string; permission: string }, options?: ErrorOptions): never {
-  throw new Error(
+  throw new PermissionError(
       `Ensure that GitHub job has permission: \`${permission.scope}: ${permission.permission}\`. ` +
       // eslint-disable-next-line max-len
       'https://docs.github.com/en/actions/security-guides/automatic-token-authentication#modifying-the-permissions-for-the-github_token',
-      options)
+      permission,
+      options,
+  )
+}
+
+export class PermissionError extends Error {
+
+  scope: string;
+  permission: string;
+
+  constructor(msg: string, permission: { scope: string; permission: string }, options?: ErrorOptions) {
+    super(msg, options);
+
+    this.scope = permission.scope;
+    this.permission = permission.permission;
+
+    // Set the prototype explicitly.
+    Object.setPrototypeOf(this, PermissionError.prototype);
+  }
+}
+
+// --- Job State Management ---------------------------------------------------
+
+const JOB_STATE_FILE = `${context.runnerTempDir ?? '/tmp'}/${context.action.replace(/_\d*$/, '')}`;
+
+export function addJobState<T>(obj: T) {
+  fs.appendFileSync(JOB_STATE_FILE, JSON.stringify(obj) + '\n');
+}
+
+export function getJobState<T>() {
+  if(!fs.existsSync(JOB_STATE_FILE)) return [];
+
+  return fs.readFileSync(JOB_STATE_FILE).toString()
+      .split('\n').filter(line => line.trim().length > 0)
+      .map(line => JSON.parse(line)) as T[];
 }

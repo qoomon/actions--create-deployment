@@ -1,17 +1,15 @@
 import * as core from '@actions/core'
 import * as github from '@actions/github'
-import {context, getInput, getJobObject, run} from '../lib/actions'
+import {context, getInput, getCurrentJob, run, addJobState} from '../lib/actions'
 import {fileURLToPath} from 'url'
 import {DeploymentStatusSchema, parseRepository} from '../lib/github';
 import process from "node:process";
 import {z} from "zod";
-import {addJobState} from "./job-sate";
 
 export const action = () => run(async () => {
   const inputs = {
     token: getInput('token', {required: true}),
     repository: getInput('repository', {required: true}),
-
     ref: getInput('ref', {required: true}),
     task: getInput('task'),
     state: getInput('state', DeploymentStatusSchema) ?? 'in_progress',
@@ -25,20 +23,14 @@ export const action = () => run(async () => {
     logUrl: getInput('log-url', z.string().url()),
   };
 
-  const octokit = github.getOctokit(inputs.token)
+  const octokit = github.getOctokit(inputs.token);
 
   if (!inputs.logUrl) {
-    inputs.logUrl = await getJobObject(octokit)
-        .then((job) => job.html_url || getWorkflowRunHtmlUrl(context))
-        .catch((error) => {
-          core.warning(error.message)
-          core.warning('Fallback to workflow run URL') // TODO better wording
-          return getWorkflowRunHtmlUrl(context);
-        })
+    const currentJob = await getCurrentJob(octokit);
+    inputs.logUrl = currentJob.html_url || getWorkflowRunHtmlUrl(context);
   }
 
-  core.info('DEBUG: ' + JSON.stringify(inputs, null, 2))
-  core.info(`Create deployment for environment ${inputs.environment}`)
+  core.info(`Create deployment for environment ${inputs.environment}`);
   // https://docs.github.com/en/rest/deployments/deployments?apiVersion=2022-11-28#create-a-deployment
   const {data: deployment} = await octokit.rest.repos.createDeployment({
     ...parseRepository(inputs.repository),
@@ -54,7 +46,7 @@ export const action = () => run(async () => {
     auto_merge: false,
   });
   if (!('id' in deployment)) {
-    core.setFailed(deployment.message ?? 'Failed to create create-deployment')
+    core.setFailed(deployment.message ?? 'Failed to create create-deployment');
     return
   }
 
@@ -62,7 +54,7 @@ export const action = () => run(async () => {
   core.setOutput('deployment-id', deployment.id);
   addJobState({repository: inputs.repository, deploymentId: deployment.id})
 
-  core.info(`Create deployment status '${inputs.state}'`)
+  core.info(`Create deployment status '${inputs.state}'`);
   await octokit.rest.repos.createDeploymentStatus({
     ...parseRepository(inputs.repository),
     deployment_id: deployment.id,
@@ -72,7 +64,7 @@ export const action = () => run(async () => {
 
     auto_inactive: inputs.autoInactive ?? false,
     environment_url: inputs.environmentUrl,
-  })
+  });
 })
 
 function getWorkflowRunHtmlUrl(context: {
@@ -82,7 +74,7 @@ function getWorkflowRunHtmlUrl(context: {
   runAttempt?: number
 }) {
   return `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}` +
-      (context.runAttempt ? `/attempts/${context.runAttempt}` : '')
+      (context.runAttempt ? `/attempts/${context.runAttempt}` : '');
 }
 
 function getInputTryJson(name: string, options?: core.InputOptions) {
@@ -98,5 +90,5 @@ function getInputTryJson(name: string, options?: core.InputOptions) {
 
 // Execute the action, if running as the main module
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  action()
+  action();
 }
