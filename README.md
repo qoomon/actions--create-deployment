@@ -13,7 +13,7 @@ and will be closed  automatically at the end of job the deployment with status `
     example:
       runs-on: ubuntu-latest
       steps:
-        - uses: qoomon/actions--create-deployment@v1
+        - uses: qoomon/actions--create-deployment@v2
           with:
             environment: production
   ```
@@ -24,13 +24,13 @@ and will be closed  automatically at the end of job the deployment with status `
     example:
       runs-on: ubuntu-latest
       steps:
-        - uses: qoomon/actions--create-deployment@v1
+        - uses: qoomon/actions--create-deployment@v2
           with:
             environment: production
 
         - run: echo "Deployment is in progress..."
 
-        - uses: qoomon/actions--create-deployment/status@v1
+        - uses: qoomon/actions--create-deployment/status@v2
           with:
             state: success
   ```
