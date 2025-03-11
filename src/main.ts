@@ -26,8 +26,12 @@ export const action = () => run(async () => {
   const octokit = github.getOctokit(inputs.token);
 
   if (!inputs.logUrl) {
-    const currentJob = await getCurrentJob(octokit);
-    inputs.logUrl = currentJob.html_url || getWorkflowRunHtmlUrl(context);
+    const currentJob = await getCurrentJob(octokit)
+        .catch((error) => {
+          core.warning(error.message);
+          return null;
+        });
+    inputs.logUrl = currentJob?.html_url || getWorkflowRunHtmlUrl(context);
   }
 
   core.info(`Create deployment for environment ${inputs.environment}`);

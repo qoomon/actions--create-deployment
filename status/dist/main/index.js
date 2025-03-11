@@ -40233,7 +40233,7 @@ __nccwpck_require__.d(__webpack_exports__, {
 });
 
 // EXTERNAL MODULE: ./node_modules/@actions/core/lib/core.js
-var core = __nccwpck_require__(7484);
+var lib_core = __nccwpck_require__(7484);
 // EXTERNAL MODULE: ./node_modules/@actions/github/lib/github.js
 var github = __nccwpck_require__(3228);
 ;// CONCATENATED MODULE: ./node_modules/zod/lib/index.mjs
@@ -44766,7 +44766,7 @@ function run(action) {
             'message' in error && error.message != null) {
             failedMessage = error.message.toString();
         }
-        core.setFailed(failedMessage);
+        lib_core.setFailed(failedMessage);
         if (error != null && typeof error === 'object' &&
             'stack' in error) {
             console.error(error.stack);
@@ -44782,7 +44782,7 @@ function getInput(name, options_schema, schema) {
     else {
         options = options_schema;
     }
-    const input = core.getInput(name, options);
+    const input = lib_core.getInput(name, options);
     if (!input)
         return undefined;
     if (!schema)
@@ -44868,6 +44868,7 @@ let _currentJobObject;
 async function getCurrentJob(octokit) {
     if (_currentJobObject)
         return _currentJobObject;
+    let workflowRunJobs = [];
     let currentJobs = [];
     // retry until current job is found, because it may take some time until the job is available through the GitHub API
     let tryCount = 0;
@@ -44875,10 +44876,11 @@ async function getCurrentJob(octokit) {
     const tryDelay = 1000;
     do {
         tryCount++;
+        core.debug(`Try to get current job via api, attempt ${tryCount}/${tryCountMax}`);
         if (tryCount > 1) {
             await sleep(tryDelay);
         }
-        const workflowRunJobs = await octokit.paginate(octokit.rest.actions.listJobsForWorkflowRunAttempt, {
+        workflowRunJobs = await octokit.paginate(octokit.rest.actions.listJobsForWorkflowRunAttempt, {
             ...context.repo,
             run_id: context.runId,
             attempt_number: context.runAttempt,
@@ -44899,6 +44901,7 @@ async function getCurrentJob(octokit) {
         });
     } while (currentJobs.length !== 1 && tryCount < tryCountMax);
     if (currentJobs.length !== 1) {
+        core.debug(`runner_name: ${context.runnerName}\n` + 'workflow_run_jobs:' + JSON.stringify(workflowRunJobs));
         if (currentJobs.length === 0) {
             throw new Error(`Current job could not be found in workflow run.`);
         }
@@ -45084,7 +45087,7 @@ const action = () => run(async () => {
     };
     const octokit = github.getOctokit(inputs.token);
     const currentDeploymentStatus = await getLatestDeploymentStatus(octokit, inputs.repository, inputs.deploymentId);
-    core.info(`Create deployment status '${inputs.state}'`);
+    lib_core.info(`Create deployment status '${inputs.state}'`);
     await octokit.rest.repos.createDeploymentStatus({
         ...parseRepository(inputs.repository),
         deployment_id: inputs.deploymentId,
@@ -45096,7 +45099,7 @@ const action = () => run(async () => {
         environment: undefined, // keep the environment from last deployment status
         environment_url: inputs.environmentUrl || currentDeploymentStatus?.environment_url,
     });
-    core.setOutput('deployment-id', inputs.deploymentId);
+    lib_core.setOutput('deployment-id', inputs.deploymentId);
 });
 // Execute the action, if running as the main module
 if ((external_node_process_default()).argv[1] === (0,external_url_.fileURLToPath)(import.meta.url)) {

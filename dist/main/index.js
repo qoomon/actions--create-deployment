@@ -44868,6 +44868,7 @@ let _currentJobObject;
 async function getCurrentJob(octokit) {
     if (_currentJobObject)
         return _currentJobObject;
+    let workflowRunJobs = [];
     let currentJobs = [];
     // retry until current job is found, because it may take some time until the job is available through the GitHub API
     let tryCount = 0;
@@ -44875,10 +44876,11 @@ async function getCurrentJob(octokit) {
     const tryDelay = 1000;
     do {
         tryCount++;
+        core.debug(`Try to get current job via api, attempt ${tryCount}/${tryCountMax}`);
         if (tryCount > 1) {
             await sleep(tryDelay);
         }
-        const workflowRunJobs = await octokit.paginate(octokit.rest.actions.listJobsForWorkflowRunAttempt, {
+        workflowRunJobs = await octokit.paginate(octokit.rest.actions.listJobsForWorkflowRunAttempt, {
             ...context.repo,
             run_id: context.runId,
             attempt_number: context.runAttempt,
@@ -44899,6 +44901,7 @@ async function getCurrentJob(octokit) {
         });
     } while (currentJobs.length !== 1 && tryCount < tryCountMax);
     if (currentJobs.length !== 1) {
+        core.debug(`runner_name: ${context.runnerName}\n` + 'workflow_run_jobs:' + JSON.stringify(workflowRunJobs));
         if (currentJobs.length === 0) {
             throw new Error(`Current job could not be found in workflow run.`);
         }
@@ -45058,8 +45061,12 @@ const action = () => run(async () => {
     };
     const octokit = github.getOctokit(inputs.token);
     if (!inputs.logUrl) {
-        const currentJob = await getCurrentJob(octokit);
-        inputs.logUrl = currentJob.html_url || main_getWorkflowRunHtmlUrl(context);
+        const currentJob = await getCurrentJob(octokit)
+            .catch((error) => {
+            core.warning(error.message);
+            return null;
+        });
+        inputs.logUrl = currentJob?.html_url || main_getWorkflowRunHtmlUrl(context);
     }
     core.info(`Create deployment for environment ${inputs.environment}`);
     // https://docs.github.com/en/rest/deployments/deployments?apiVersion=2022-11-28#create-a-deployment

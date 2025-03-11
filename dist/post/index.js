@@ -40233,7 +40233,7 @@ __nccwpck_require__.d(__webpack_exports__, {
 });
 
 // EXTERNAL MODULE: ./node_modules/@actions/core/lib/core.js
-var core = __nccwpck_require__(7484);
+var lib_core = __nccwpck_require__(7484);
 // EXTERNAL MODULE: ./node_modules/@actions/github/lib/github.js
 var github = __nccwpck_require__(3228);
 ;// CONCATENATED MODULE: ./node_modules/zod/lib/index.mjs
@@ -44765,7 +44765,7 @@ function run(action) {
             'message' in error && error.message != null) {
             failedMessage = error.message.toString();
         }
-        core.setFailed(failedMessage);
+        lib_core.setFailed(failedMessage);
         if (error != null && typeof error === 'object' &&
             'stack' in error) {
             console.error(error.stack);
@@ -44781,7 +44781,7 @@ function getInput(name, options_schema, schema) {
     else {
         options = options_schema;
     }
-    const input = core.getInput(name, options);
+    const input = lib_core.getInput(name, options);
     if (!input)
         return undefined;
     if (!schema)
@@ -44867,6 +44867,7 @@ let _currentJobObject;
 async function getCurrentJob(octokit) {
     if (_currentJobObject)
         return _currentJobObject;
+    let workflowRunJobs = [];
     let currentJobs = [];
     // retry until current job is found, because it may take some time until the job is available through the GitHub API
     let tryCount = 0;
@@ -44874,10 +44875,11 @@ async function getCurrentJob(octokit) {
     const tryDelay = 1000;
     do {
         tryCount++;
+        core.debug(`Try to get current job via api, attempt ${tryCount}/${tryCountMax}`);
         if (tryCount > 1) {
             await sleep(tryDelay);
         }
-        const workflowRunJobs = await octokit.paginate(octokit.rest.actions.listJobsForWorkflowRunAttempt, {
+        workflowRunJobs = await octokit.paginate(octokit.rest.actions.listJobsForWorkflowRunAttempt, {
             ...context.repo,
             run_id: context.runId,
             attempt_number: context.runAttempt,
@@ -44898,6 +44900,7 @@ async function getCurrentJob(octokit) {
         });
     } while (currentJobs.length !== 1 && tryCount < tryCountMax);
     if (currentJobs.length !== 1) {
+        core.debug(`runner_name: ${context.runnerName}\n` + 'workflow_run_jobs:' + JSON.stringify(workflowRunJobs));
         if (currentJobs.length === 0) {
             throw new Error(`Current job could not be found in workflow run.`);
         }
@@ -45040,7 +45043,7 @@ var external_url_ = __nccwpck_require__(7016);
 
 
 const state = {
-    deploymentId: core.getState('deployment-id') ? parseInt(core.getState('deployment-id'), 10) : undefined,
+    deploymentId: lib_core.getState('deployment-id') ? parseInt(lib_core.getState('deployment-id'), 10) : undefined,
 };
 const action = () => run(async () => {
     const inputs = {
@@ -45050,24 +45053,24 @@ const action = () => run(async () => {
         jobStatus: getInput('#job-status', { required: true }, z.enum(['success', 'failure', 'cancelled'])),
     };
     if (!inputs.autoClose) {
-        core.debug('Skip Auto Close - Auto close is disabled');
+        lib_core.debug('Skip Auto Close - Auto close is disabled');
         return;
     }
     if (!state.deploymentId) {
-        core.debug('Skip Auto Close - No deployment to close');
+        lib_core.debug('Skip Auto Close - No deployment to close');
         return;
     }
     const octokit = github.getOctokit(inputs.token);
     // https://docs.github.com/en/rest/deployments/deployments?apiVersion=2022-11-28#create-a-deployment
     const currentDeploymentStatus = await getLatestDeploymentStatus(octokit, inputs.repository, state.deploymentId);
     if (currentDeploymentStatus?.state !== 'in_progress') {
-        core.debug('Skip Auto Close - Deployment state is not in_progress');
+        lib_core.debug('Skip Auto Close - Deployment state is not in_progress');
         return;
     }
     const deploymentStatusState = inputs.jobStatus === 'success'
         ? 'success'
         : 'failure';
-    core.info(`Create deployment status '${deploymentStatusState}'`);
+    lib_core.info(`Create deployment status '${deploymentStatusState}'`);
     await octokit.rest.repos.createDeploymentStatus({
         ...parseRepository(inputs.repository),
         deployment_id: state.deploymentId,
