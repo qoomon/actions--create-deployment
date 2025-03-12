@@ -11,7 +11,7 @@ import {
 import process from "node:process";
 import {z} from "zod";
 
-export const action = () => run(async () => {
+export const action = run(async () => {
   const jobState = getJobState<{ repository: string, deploymentId: number }>();
 
   let inputRepository = getInput('repository');

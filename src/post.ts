@@ -10,7 +10,7 @@ const state = {
   deploymentId: core.getState('deployment-id') ? parseInt(core.getState('deployment-id'), 10) : undefined,
 }
 
-export const action = () => run(async () => {
+export const action = run(async () => {
   const inputs = {
     token: getInput('token', {required: true}),
     repository: getInput('repository', {required: true}),

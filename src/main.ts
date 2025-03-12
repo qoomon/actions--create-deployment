@@ -6,7 +6,7 @@ import {DeploymentStatusSchema, parseRepository} from '../lib/github';
 import process from "node:process";
 import {z} from "zod";
 
-export const action = () => run(async () => {
+export const action = run(async () => {
   const inputs = {
     token: getInput('token', {required: true}),
     repository: getInput('repository', {required: true}),
